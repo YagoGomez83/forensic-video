@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  servidor:
+    name: Servidor .NET (build + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore src/server/Forensic.sln
+      - run: dotnet build src/server/Forensic.sln -c Release --no-restore
+      # Los tests de integración levantan PostgreSQL con Testcontainers (Docker viene en el runner).
+      - run: dotnet test src/server/Forensic.sln -c Release --no-build
+      - name: Dependencias NuGet vulnerables
+        run: |
+          dotnet list src/server/Forensic.sln package --vulnerable --include-transitive | tee vulnerables.txt
+          if grep -q "has the following vulnerable packages" vulnerables.txt; then exit 1; fi
+
+  worker-ingest:
+    name: Worker de ingesta (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/workers/ingest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+  imagenes:
+    name: Imágenes Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f src/server/Dockerfile -t forensic-servidor:ci .
+      - run: docker build -t forensic-worker-ingest:ci src/workers/ingest
+
+  trivy:
+    name: Escaneo Trivy (dependencias, secretos, configuración)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  codeql:
+    name: CodeQL (${{ matrix.lenguaje }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        lenguaje: [csharp, python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.lenguaje }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@v3
