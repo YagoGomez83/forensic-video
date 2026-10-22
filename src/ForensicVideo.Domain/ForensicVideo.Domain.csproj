@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- El dominio no referencia ningún paquete: ni EF Core, ni ASP.NET, ni librerías de imagen. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ForensicVideo.Domain.Tests" />
+  </ItemGroup>
+
+</Project>
