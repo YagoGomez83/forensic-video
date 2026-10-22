@@ -486,3 +486,13 @@ $RECYCLE.BIN/
 # Local
 .env
 .datos/
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Claude Code: la configuración local de cada persona no se versiona
+.claude/settings.local.json
