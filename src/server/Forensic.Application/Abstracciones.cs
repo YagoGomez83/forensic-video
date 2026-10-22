@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
@@ -45,4 +46,21 @@ public interface IAlmacenDeEvidencia
     /// <see cref="IntegridadComprometidaException"/> si no coincide o si falta.
     /// </summary>
     Task<Stream> AbrirVerificadoAsync(HashSha256 hash, CancellationToken ct);
+}
+
+/// <summary>
+/// Lo que reporta el worker de ingesta sobre los mismos bytes crudos que guardó el almacén. Su hash
+/// es un control cruzado; la fuente de verdad es el del almacén. <see cref="Metadatos"/> es la salida
+/// de ffprobe, o null si no pudo leer el formato (la evidencia se custodia igual).
+/// </summary>
+public sealed record AnalisisDeIngesta(HashSha256 Hash, long TamanoBytes, JsonElement? Metadatos, string? MotivoSinMetadatos);
+
+/// <summary>Worker de ingesta: hash de control y metadatos (ffprobe, sólo lectura). Nunca transcodifica.</summary>
+public interface IWorkerDeIngesta
+{
+    /// <summary>
+    /// Analiza el contenido. Lanza <see cref="WorkerDeIngestaNoDisponibleException"/> si el worker
+    /// no responde o falla.
+    /// </summary>
+    Task<AnalisisDeIngesta> AnalizarAsync(Stream contenido, CancellationToken ct);
 }

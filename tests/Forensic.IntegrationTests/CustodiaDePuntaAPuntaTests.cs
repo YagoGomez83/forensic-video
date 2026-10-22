@@ -2,11 +2,16 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Forensic.Api.Controllers;
+using Forensic.Application;
 using Forensic.Application.Casos;
 using Forensic.Application.Custodia;
 using Forensic.Application.Evidencias;
 using Forensic.Domain.Comun;
+using Forensic.Infrastructure.Workers;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace Forensic.IntegrationTests;
@@ -51,6 +56,75 @@ public class CustodiaDePuntaAPuntaTests(ServidorForense servidor) : IClassFixtur
         Assert.All(export.Asientos, a => Assert.Equal("ana", a.Actor));
         Assert.Equal(export.Asientos[^1].Hash, export.Verificacion.HashFinal);
         Assert.Contains(shaEsperado, export.Asientos[1].Detalle);
+    }
+
+    [Fact]
+    public async Task Ingesta_se_rechaza_si_el_hash_del_worker_no_coincide()
+    {
+        var caso = await AbrirCasoAsync();
+        await using var conWorkerDiscrepante = servidor.WithWebHostBuilder(b =>
+            b.ConfigureTestServices(s => s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble(discrepar: true))));
+        var ana = conWorkerDiscrepante.CreateClient().ComoActor("ana", Rol.Analista);
+
+        var r = await IngestarAsync(ana, caso.Id, RandomNumberGenerator.GetBytes(4096));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, r.StatusCode);
+        Assert.Empty(await (await _ana.GetAsync($"/casos/{caso.Id}/evidencias")).LeerAsync<List<EvidenciaDto>>());
+        var export = await (await _ana.GetAsync($"/casos/{caso.Id}/custodia")).LeerAsync<ExportDeCustodia>();
+        Assert.True(export.Verificacion.EsIntegra, export.Verificacion.Motivo);
+        Assert.Equal(["CasoAbierto"], export.Asientos.Select(a => a.Tipo));
+    }
+
+    [Fact]
+    public async Task La_ingesta_asienta_el_control_cruzado_y_los_metadatos()
+    {
+        var caso = await AbrirCasoAsync();
+
+        var evidencia = await (await IngestarAsync(_ana, caso.Id, RandomNumberGenerator.GetBytes(2048))).LeerAsync<EvidenciaDto>();
+
+        var export = await (await _ana.GetAsync($"/casos/{caso.Id}/custodia")).LeerAsync<ExportDeCustodia>();
+        using var detalle = JsonDocument.Parse(export.Asientos[1].Detalle);
+        var raiz = detalle.RootElement;
+        Assert.Equal(evidencia.Hash, raiz.GetProperty("controlCruzado").GetProperty("sha256Worker").GetString());
+        Assert.Equal("doble", raiz.GetProperty("metadatos").GetProperty("version").GetString());
+        Assert.Equal(JsonValueKind.Null, raiz.GetProperty("motivoSinMetadatos").ValueKind);
+    }
+
+    [Fact]
+    public async Task Una_evidencia_que_ffprobe_no_lee_se_custodia_igual()
+    {
+        var caso = await AbrirCasoAsync();
+        await using var sinMetadatos = servidor.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble(motivoSinMetadatos: "formato no reconocido"))));
+        var ana = sinMetadatos.CreateClient().ComoActor("ana", Rol.Analista);
+
+        var r = await IngestarAsync(ana, caso.Id, RandomNumberGenerator.GetBytes(2048), "export.dav");
+
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var export = await (await _ana.GetAsync($"/casos/{caso.Id}/custodia")).LeerAsync<ExportDeCustodia>();
+        using var detalle = JsonDocument.Parse(export.Asientos[1].Detalle);
+        Assert.Equal(JsonValueKind.Null, detalle.RootElement.GetProperty("metadatos").ValueKind);
+        Assert.Equal("formato no reconocido", detalle.RootElement.GetProperty("motivoSinMetadatos").GetString());
+    }
+
+    [Fact]
+    public async Task Sin_worker_de_ingesta_no_hay_ingesta()
+    {
+        var caso = await AbrirCasoAsync();
+        // El cliente HTTP real contra un puerto donde no escucha nadie.
+        await using var sinWorker = servidor.WithWebHostBuilder(b =>
+        {
+            b.UseSetting("WorkerIngesta:UrlBase", "http://127.0.0.1:9");
+            b.ConfigureTestServices(s => s.AddHttpClient<IWorkerDeIngesta, WorkerDeIngestaHttp>());
+        });
+        var ana = sinWorker.CreateClient().ComoActor("ana", Rol.Analista);
+
+        var r = await IngestarAsync(ana, caso.Id, RandomNumberGenerator.GetBytes(2048));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, r.StatusCode);
+        Assert.Empty(await (await _ana.GetAsync($"/casos/{caso.Id}/evidencias")).LeerAsync<List<EvidenciaDto>>());
+        var export = await (await _ana.GetAsync($"/casos/{caso.Id}/custodia")).LeerAsync<ExportDeCustodia>();
+        Assert.Equal(["CasoAbierto"], export.Asientos.Select(a => a.Tipo));
     }
 
     [Fact]

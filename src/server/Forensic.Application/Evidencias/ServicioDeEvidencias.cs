@@ -18,13 +18,16 @@ public sealed record ContenidoDeEvidencia(EvidenciaDto Evidencia, Stream Conteni
 public sealed class ServicioDeEvidencias(
     IPersistenciaForense persistencia,
     IAlmacenDeEvidencia almacen,
+    IWorkerDeIngesta worker,
     IActorActual actorActual,
     TimeProvider reloj)
 {
     /// <summary>
-    /// Ingesta de un original: primero se hashea (al escribirlo en el almacén) y sólo entonces se
-    /// crea la evidencia y su asiento, ambos en la misma transacción. Si el asiento falla, la
-    /// evidencia no existe; el blob queda huérfano pero es inofensivo (direccionado por contenido).
+    /// Ingesta de un original: primero se hashean los bytes crudos al escribirlos en el almacén (la
+    /// fuente de verdad). Luego el worker analiza esos mismos bytes, releídos del almacén, y su hash
+    /// tiene que coincidir; si no, la ingesta se rechaza. Sólo entonces se crea la evidencia y su
+    /// asiento, ambos en la misma transacción. Si algo falla, la evidencia no existe; el blob queda
+    /// huérfano pero es inofensivo (direccionado por contenido).
     /// </summary>
     public async Task<EvidenciaDto> IngestarAsync(Guid casoId, string nombreOriginal, Stream contenido, CancellationToken ct)
     {
@@ -34,7 +37,10 @@ public sealed class ServicioDeEvidencias(
         caso.ExigirOperacion(actor);
 
         var almacenado = await almacen.GuardarAsync(contenido, ct);
+        var analisis = await AnalizarAsync(almacenado, ct);
 
+        // El reloj se lee después del análisis, que puede tardar: el asiento no puede quedar
+        // fechado antes que otro asentado en la cadena mientras tanto.
         var ahora = reloj.GetUtcNow();
         var evidencia = Evidencia.Ingestar(caso, almacenado.Hash, almacenado.TamanoBytes, nombreOriginal, actor, ahora);
         var ultimo = await persistencia.ObtenerUltimoAsientoAsync(casoId, ct);
@@ -46,6 +52,9 @@ public sealed class ServicioDeEvidencias(
                 evidencia.TamanoBytes,
                 evidencia.NombreOriginal,
                 via = evidencia.Via.ToString(),
+                controlCruzado = new { sha256Worker = analisis.Hash.Hex, tamanoBytesWorker = analisis.TamanoBytes },
+                metadatos = analisis.Metadatos,
+                analisis.MotivoSinMetadatos,
             }),
             actor, ahora);
 
@@ -91,6 +100,23 @@ public sealed class ServicioDeEvidencias(
             throw;
         }
         return new ContenidoDeEvidencia(EvidenciaDto.Desde(evidencia), contenido);
+    }
+
+    /// <summary>
+    /// Control cruzado: el worker recibe los bytes tal como quedaron en el almacén (releídos con
+    /// verificación de hash) y su hash y tamaño tienen que coincidir con los del servidor.
+    /// </summary>
+    private async Task<AnalisisDeIngesta> AnalizarAsync(ContenidoAlmacenado almacenado, CancellationToken ct)
+    {
+        AnalisisDeIngesta analisis;
+        await using (var crudo = await almacen.AbrirVerificadoAsync(almacenado.Hash, ct))
+            analisis = await worker.AnalizarAsync(crudo, ct);
+
+        if (analisis.Hash != almacenado.Hash || analisis.TamanoBytes != almacenado.TamanoBytes)
+            throw new IngestaRechazadaException(
+                $"El control cruzado no coincide: el servidor calculó {almacenado.Hash} ({almacenado.TamanoBytes} bytes) " +
+                $"y el worker de ingesta {analisis.Hash} ({analisis.TamanoBytes} bytes).");
+        return analisis;
     }
 
     private async Task<Caso> CargarCasoAsync(Guid casoId, CancellationToken ct) =>

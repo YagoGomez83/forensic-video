@@ -2,9 +2,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Forensic.Api.Identidad;
+using Forensic.Application;
 using Forensic.Domain.Comun;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
 namespace Forensic.IntegrationTests;
@@ -43,19 +46,21 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
         builder.UseSetting("ConnectionStrings:Forense", _postgres.GetConnectionString());
         builder.UseSetting("AlmacenDeEvidencia:RutaRaiz", RutaAlmacen);
         builder.UseSetting("Persistencia:MigrarAlIniciar", "true");
+        builder.ConfigureTestServices(s => s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble()));
     }
 
-    public HttpClient ClienteDe(string usuario, Rol rol)
-    {
-        var cliente = CreateClient();
-        cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraUsuario, usuario);
-        cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraRol, rol.ToString());
-        return cliente;
-    }
+    public HttpClient ClienteDe(string usuario, Rol rol) => CreateClient().ComoActor(usuario, rol);
 }
 
 internal static class HttpExtensiones
 {
+    public static HttpClient ComoActor(this HttpClient cliente, string usuario, Rol rol)
+    {
+        cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraUsuario, usuario);
+        cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraRol, rol.ToString());
+        return cliente;
+    }
+
     public static async Task<T> LeerAsync<T>(this HttpResponseMessage r)
     {
         if (!r.IsSuccessStatusCode)

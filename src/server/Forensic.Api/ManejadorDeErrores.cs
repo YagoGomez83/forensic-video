@@ -18,6 +18,8 @@ internal sealed class ManejadorDeErrores(IProblemDetailsService problemDetails) 
             ConflictoDeCustodiaException => (StatusCodes.Status409Conflict, "Conflicto en la cadena de custodia"),
             // Discrepancia de hash = bloqueo de la evidencia.
             IntegridadComprometidaException => (StatusCodes.Status423Locked, "Integridad de la evidencia comprometida"),
+            IngestaRechazadaException => (StatusCodes.Status422UnprocessableEntity, "Ingesta rechazada"),
+            WorkerDeIngestaNoDisponibleException => (StatusCodes.Status503ServiceUnavailable, "Worker de ingesta no disponible"),
             ExcepcionDeDominio => (StatusCodes.Status422UnprocessableEntity, "Regla forense violada"),
             _ => null,
         };
