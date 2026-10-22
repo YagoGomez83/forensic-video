@@ -35,6 +35,14 @@ public sealed class EvidenciasController(ServicioDeEvidencias evidencias, IOptio
     [HttpGet]
     public Task<IReadOnlyList<EvidenciaDto>> Listar(Guid casoId, CancellationToken ct) => evidencias.ListarAsync(casoId, ct);
 
+    /// <summary>
+    /// Re-ejecuta el control cruzado de una evidencia que se ingestó con el worker caído. El resultado
+    /// queda en un asiento nuevo de la cadena.
+    /// </summary>
+    [HttpPost("{evidenciaId:guid}/control-cruzado")]
+    public Task<ResultadoDeControlCruzado> CompletarControlCruzado(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        evidencias.CompletarControlCruzadoAsync(casoId, evidenciaId, ct);
+
     /// <summary>Contenido de la evidencia, entregado sólo después de verificar su hash.</summary>
     [HttpGet("{evidenciaId:guid}/contenido")]
     public async Task<IActionResult> Contenido(Guid casoId, Guid evidenciaId, CancellationToken ct)

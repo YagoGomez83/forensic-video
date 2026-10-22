@@ -1,8 +1,12 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Forensic.Api.Controllers;
 using Forensic.Api.Identidad;
 using Forensic.Application;
+using Forensic.Application.Casos;
+using Forensic.Application.Custodia;
 using Forensic.Domain.Comun;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -60,6 +64,21 @@ internal static class HttpExtensiones
         cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraRol, rol.ToString());
         return cliente;
     }
+
+    public static async Task<CasoDto> AbrirCasoAsync(this HttpClient cliente) =>
+        await (await cliente.PostAsJsonAsync("/casos", new AbrirCasoRequest($"EXP-{Guid.NewGuid():N}"[..20], "Prueba")))
+            .LeerAsync<CasoDto>();
+
+    public static async Task<HttpResponseMessage> IngestarAsync(
+        this HttpClient cliente, Guid casoId, byte[] bytes, string nombre = "cámara 1.mp4")
+    {
+        var contenido = new ByteArrayContent(bytes);
+        contenido.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        return await cliente.PostAsync($"/casos/{casoId}/evidencias?nombre={Uri.EscapeDataString(nombre)}", contenido);
+    }
+
+    public static async Task<ExportDeCustodia> ExportarAsync(this HttpClient cliente, Guid casoId) =>
+        await (await cliente.GetAsync($"/casos/{casoId}/custodia")).LeerAsync<ExportDeCustodia>();
 
     public static async Task<T> LeerAsync<T>(this HttpResponseMessage r)
     {

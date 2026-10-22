@@ -11,6 +11,7 @@ public enum TipoAsiento
     CasoCerrado = 3,
     EvidenciaIngestada = 4,
     EvidenciaAccedida = 5,
+    ControlCruzadoCompletado = 6,
 }
 
 /// <summary>

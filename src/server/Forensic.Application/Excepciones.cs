@@ -8,10 +8,17 @@ public sealed class NoEncontradoException(string mensaje) : Exception(mensaje);
 public sealed class ConflictoDeCustodiaException(string mensaje, Exception? interna = null)
     : Exception(mensaje, interna);
 
-/// <summary>El control cruzado del worker no coincide con lo que guardó el servidor: la ingesta no ocurre.</summary>
+/// <summary>El worker de ingesta rechazó el contenido (su <c>/v1/analizar</c> respondió 422).</summary>
 public sealed class IngestaRechazadaException(string mensaje) : Exception(mensaje);
 
-/// <summary>Sin control cruzado no hay ingesta: el worker no respondió o falló.</summary>
+/// <summary>
+/// El worker reportó un hash o tamaño distinto de los bytes que el servidor le mandó, ya verificados
+/// contra el almacén. No es un rechazo de contenido: es corrupción en tránsito o un worker roto o
+/// comprometido, un evento de seguridad.
+/// </summary>
+public sealed class DivergenciaDeControlCruzadoException(string mensaje) : Exception(mensaje);
+
+/// <summary>El worker de ingesta no respondió, falló o devolvió una respuesta inválida.</summary>
 public sealed class WorkerDeIngestaNoDisponibleException(string mensaje, Exception? interna = null)
     : Exception(mensaje, interna);
 

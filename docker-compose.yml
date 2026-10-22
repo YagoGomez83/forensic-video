@@ -24,7 +24,7 @@ services:
       # Development es obligatorio mientras no exista el módulo de identidad.
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Forense: Host=postgres;Database=forense;Username=forense;Password=${POSTGRES_PASSWORD}
-      # Control cruzado de cada ingesta: sin worker no se ingesta.
+      # Control cruzado de cada ingesta. Con el worker caído se ingesta igual y el cruce queda pendiente.
       WorkerIngesta__UrlBase: http://worker-ingest:8000
     ports:
       - "127.0.0.1:5065:8080"
