@@ -4,44 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Estado del repositorio
 
-Esqueleto de la Fase 1 (servidor de custodia .NET 8, sin UI ni workers). Todavía no hay módulo de identidad ni CI.
+Fase 1: servidor de custodia .NET 8 (`src/server`) y primer worker Python de ingesta (`src/workers/ingest`). `client/` (Avalonia) llega en la Fase 3. Todavía no existe el módulo de identidad.
+
+La fuente de diseño es `docs/architecture.md`; los cambios de diseño se hacen ahí. Lo que sigue resume lo que condiciona el código.
 
 ## Comandos
 
 ```bash
-dotnet build                                   # warnings = errores (Directory.Build.props)
-dotnet test                                    # todo; los de integración requieren Docker
-dotnet test tests/ForensicVideo.Domain.Tests   # sólo dominio, sin Docker
-dotnet test --filter "FullyQualifiedName~RegistroDeCustodiaTests.Eliminar_un_asiento_intermedio_se_detecta"
+# Servidor (.NET). Warnings = errores (Directory.Build.props).
+dotnet build src/server/Forensic.sln
+dotnet test src/server/Forensic.sln               # todo; los de integración requieren Docker en marcha
+dotnet test tests/Forensic.Domain.Tests           # sólo dominio, sin Docker
+dotnet test src/server/Forensic.sln --filter "FullyQualifiedName~RegistroDeCustodiaTests.Eliminar_un_asiento_intermedio_se_detecta"
 
 # Migraciones (dotnet-ef global). Revisar el SQL generado: los triggers van a mano.
-dotnet ef migrations add <Nombre> --project src/ForensicVideo.Infrastructure --output-dir Persistencia/Migraciones
+dotnet ef migrations add <Nombre> --project src/server/Forensic.Infrastructure --output-dir Persistencia/Migraciones
 
-# Ejecutar en local
-cp .env.example .env    # definir POSTGRES_PASSWORD
-docker compose up -d    # PostgreSQL 17 en 127.0.0.1:5433
-dotnet user-secrets set "ConnectionStrings:Forense" "Host=localhost;Port=5433;Database=forense;Username=forense;Password=<la de .env>" --project src/ForensicVideo.Api
-dotnet run --project src/ForensicVideo.Api     # http://localhost:5065, migra al iniciar en Development
+# Worker de ingesta (Python 3.12, desde src/workers/ingest)
+py -3.12 -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/python -m pytest                    # un test: -k test_analizar_devuelve_hash_y_metadatos
+.venv/Scripts/python -m ruff check . && .venv/Scripts/python -m ruff format --check .
+
+# Todo en local con Docker
+cp .env.example .env                              # definir POSTGRES_PASSWORD
+docker compose up -d --build                      # servidor :5065, worker :8000, PostgreSQL :5433 (sólo 127.0.0.1)
+
+# O el servidor fuera de Docker, contra el PostgreSQL del compose
+dotnet user-secrets set "ConnectionStrings:Forense" "Host=localhost;Port=5433;Database=forense;Username=forense;Password=<la de .env>" --project src/server/Forensic.Api
+dotnet run --project src/server/Forensic.Api      # http://localhost:5065, migra al iniciar en Development
 ```
 
-Las versiones de paquetes están centralizadas en `Directory.Packages.props` (los `.csproj` no llevan `Version`). EF Core va alineado a la versión que exige Npgsql (8.0.11). El SDK está fijado en `global.json`.
+Las versiones NuGet están centralizadas en `Directory.Packages.props` (los `.csproj` no llevan `Version`); EF Core va alineado a la versión que exige Npgsql (8.0.11). El SDK está fijado en `global.json`. Las dependencias Python van con versión exacta en `pyproject.toml`. CI (`.github/workflows/ci.yml`): build y test de ambos, imágenes Docker, Trivy y CodeQL.
 
-## Estructura de la solución
+## Estructura
 
-- `src/ForensicVideo.Domain`: agregados e invariantes. Sin paquetes externos; sólo BCL (SHA-256 incluido).
-- `src/ForensicVideo.Application`: casos de uso (`ServicioDeCasos`, `ServicioDeEvidencias`, `ServicioDeCustodia`) y puertos (`IPersistenciaForense`, `IAlmacenDeEvidencia`, `IActorActual`). El reloj es `TimeProvider`: nunca usar `DateTime.Now` ni un timestamp que venga del cliente.
-- `src/ForensicVideo.Infrastructure`: EF Core/Npgsql (`ContextoForense`, migraciones en `Persistencia/Migraciones`) y almacén de blobs en disco direccionado por hash (`raiz/ab/cd/<sha256>`, solo lectura).
-- `src/ForensicVideo.Api`: minimal API (`Endpoints.cs`). Las excepciones se mapean a ProblemDetails en `ManejadorDeErrores` (403 acceso, 404, 409 conflicto de cadena, 422 regla de dominio, 423 integridad comprometida).
-- `tests/ForensicVideo.IntegrationTests`: `WebApplicationFactory` + Testcontainers (`postgres:17`), entorno `Testing`.
+- `src/server/Forensic.Domain`: agregados e invariantes. Sin paquetes externos; sólo BCL (SHA-256 incluido).
+- `src/server/Forensic.Application`: casos de uso (`ServicioDeCasos`, `ServicioDeEvidencias`, `ServicioDeCustodia`) y puertos (`IPersistenciaForense`, `IAlmacenDeEvidencia`, `IActorActual`). El reloj es `TimeProvider`: nunca usar `DateTime.Now` ni un timestamp que venga del cliente.
+- `src/server/Forensic.Infrastructure`: EF Core/Npgsql (`ContextoForense`, migraciones en `Persistencia/Migraciones`) y almacén de blobs en disco direccionado por hash (`raiz/ab/cd/<sha256>`, solo lectura).
+- `src/server/Forensic.Api`: controllers (`Controllers/`). Las excepciones se mapean a ProblemDetails en `ManejadorDeErrores` (401, 403 acceso, 404, 409 conflicto de cadena, 422 regla de dominio, 423 integridad comprometida).
+- `tests/Forensic.Domain.Tests` y `tests/Forensic.IntegrationTests` (`WebApplicationFactory` + Testcontainers `postgres:17`, entorno `Testing`). Ambos están en `Forensic.sln` aunque vivan fuera de `src/server`.
+- `src/workers/ingest`: FastAPI. `POST /v1/analizar` recibe el archivo en crudo y devuelve SHA-256 + metadatos de ffprobe. Su hash es un control cruzado sobre **los mismos bytes crudos** que hashea el servidor: si el worker llegara a normalizar, reporta el hash del crudo de entrada, nunca el de su salida. La fuente de verdad es el hash que calcula el servidor al ingestar; si no coinciden, la ingesta se rechaza. ffprobe se invoca con una lista de argumentos sobre una ruta temporal propia, nunca con el nombre de la evidencia.
 
 Detalles que no se ven a simple vista:
-- **Identidad provisoria:** `ActorDeDesarrollo` lee las cabeceras `X-Usuario`/`X-Rol` sin autenticar. `Program.cs` se niega a arrancar fuera de `Development`/`Testing` hasta que exista el módulo de identidad.
+- **Identidad provisoria:** `ActorDeDesarrollo` lee las cabeceras `X-Usuario`/`X-Rol` sin autenticar. `Program.cs` se niega a arrancar fuera de `Development`/`Testing` hasta que exista el módulo de identidad (por eso el compose fuerza `Development`).
 - **Asentar en la cadena:** leer `ObtenerUltimoAsientoAsync` → `RegistroDeCustodia.Asentar(...)` → `Agregar` la entidad y el asiento → un solo `GuardarCambiosAsync`. El índice único `(CasoId, Secuencia)` serializa las escrituras concurrentes: el perdedor recibe `ConflictoDeCustodiaException` (409).
 - **Formato canónico del hash** (`AsientoDeCustodia.CalcularHash`, `forensic-video/custodia/v1`): campos con prefijo de longitud y timestamp UTC truncado a microsegundos (la precisión de PostgreSQL). Cambiarlo invalida todas las cadenas existentes: hay que versionarlo.
 - **Triggers append-only:** están en la migración `Inicial` (SQL a mano) y bloquean UPDATE/DELETE/TRUNCATE en `AsientosDeCustodia` y `Evidencias`.
 - `OperacionForense` y `Evidencia.Derivar` (doble vía) existen sólo en el dominio. La persistencia y los endpoints llegan con la Fase 2.
-
-La fuente de diseño es `../Sistema Forense de Imagen — Arquitectura y Roadmap (1).pdf` (la versión `(1)` es la más reciente; incluye las decisiones cerradas). Lo que sigue resume lo que condiciona el código.
 
 ## Qué es
 
@@ -55,7 +64,7 @@ Híbrida: el cómputo corre en la workstation del analista (GPU NVIDIA local); l
 - **Servidor de custodia:** .NET 8 + ASP.NET Core, monolito modular con bounded contexts (no microservicios: fragmentaría las transacciones de la cadena de custodia). API REST con authN/Z por rol y por caso, núcleo de dominio, servicio de auditoría (hash-chain). Cliente↔servidor por HTTPS/mTLS.
 - **Persistencia:** tres cosas separadas que no se mezclan — PostgreSQL vía EF Core (casos/metadatos), almacén de blobs de evidencia (originales inmutables + SHA-256), y el log de custodia append-only encadenado.
 - **Cola:** empezar con cola en PostgreSQL; RabbitMQ sólo si hace falta.
-- **Ingesta:** FFmpeg para normalizar contenedores/códecs y extraer frames (celulares; Milestone MKV/AVI/MP4; HikVision), preservando siempre el original y su hash.
+- **Ingesta:** sólo se hashean los bytes crudos y se leen metadatos (ffprobe, sólo lectura); **nunca se transcodifica en la ingesta**. La normalización de contenedores/códecs y la extracción de frames (celulares; Milestone MKV/AVI/MP4; HikVision) son Operaciones de la Fase 2 que producen derivados, no pasos de ingesta.
 - **Identidad:** no hay Active Directory. Módulo de identidad propio en el servidor (roles analista/supervisor/auditor, Argon2 o bcrypt), con auditoría de accesos separada del log de custodia.
 
 Clean Architecture + DDD: la capa de dominio no referencia OpenCV, PyTorch, EF Core ni ASP.NET. Si una regla de custodia importa algo de infraestructura, es un error de diseño.
@@ -65,8 +74,8 @@ Clean Architecture + DDD: la capa de dominio no referencia OpenCV, PyTorch, EF C
 Agregados: `Caso`, `Evidencia`, `OperacionForense`, `RegistroDeCustodia`.
 
 Invariantes no negociables:
-1. Toda evidencia se hashea (SHA-256) antes de cualquier otra cosa; sin hash no hay ingesta. Se verifica el hash en cada lectura; discrepancia = alerta y bloqueo.
-2. Ninguna operación modifica el original: siempre produce un derivado nuevo con su propio hash, que referencia a su padre.
+1. **El hash es de los bytes crudos exactos**, calculado sobre el archivo tal como se recibe, antes de validar, inspeccionar o normalizar nada. Esos bytes exactos son el blob original que se preserva. Sin hash no hay ingesta. Se verifica el hash en cada lectura; discrepancia = alerta y bloqueo.
+2. Ninguna operación modifica el original: siempre produce un derivado nuevo con su propio hash, que referencia a su padre. **Normalizar o transcodificar (FFmpeg) es una Operación, no parte de la ingesta**: genera un derivado con su propio asiento, clasificado con criterio estricto (un transcode altera píxeles → no es automáticamente «admisible en juicio»).
 3. Cada `OperacionForense` (tipo, parámetros, hash de entrada y salida, actor) se registra atómicamente con su asiento en el log. Si falla el asiento, la operación no ocurrió. Es inmutable una vez registrada.
 4. `RegistroDeCustodia` es append-only y encadenado: cada registro incluye el hash del anterior.
 5. Actor autenticado y **timestamp del servidor**, nunca del cliente. Nada pericial se decide confiando en el cliente.
