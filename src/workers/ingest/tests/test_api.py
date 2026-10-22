@@ -60,3 +60,20 @@ def test_sin_ffprobe_el_worker_no_analiza(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ffprobe, "ruta_ffprobe", lambda: None)
 
     assert TestClient(app).post("/v1/analizar", content=b"datos").status_code == 503
+
+
+def test_un_formato_que_ffprobe_no_lee_igual_devuelve_el_hash(monkeypatch: pytest.MonkeyPatch):
+    def analizar_falla(binario: str, archivo: Path) -> ffprobe.Metadatos:
+        raise ffprobe.FfprobeError("Invalid data found when processing input")
+
+    monkeypatch.setattr(ffprobe, "ruta_ffprobe", lambda: "/usr/bin/ffprobe")
+    monkeypatch.setattr(ffprobe, "analizar", analizar_falla)
+    contenido = b"DHAV" + b"\x02" * 1024
+
+    r = TestClient(app).post("/v1/analizar", content=contenido)
+
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["sha256"] == hashlib.sha256(contenido).hexdigest()
+    assert cuerpo["ffprobe"] is None
+    assert "Invalid data" in cuerpo["motivoSinMetadatos"]

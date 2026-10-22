@@ -29,7 +29,11 @@ def salud() -> dict[str, Any]:
 
 @app.post("/v1/analizar")
 async def analizar(request: Request) -> dict[str, Any]:
-    """Recibe el archivo en crudo (application/octet-stream) y devuelve hash y metadatos."""
+    """Recibe el archivo en crudo (application/octet-stream) y devuelve hash y metadatos.
+
+    Si ffprobe no reconoce el formato (p. ej. un export propietario de DVR) el hash se devuelve
+    igual, con ``ffprobe`` en null y el motivo: no poder leer un formato no impide custodiarlo.
+    """
     binario = ffprobe.ruta_ffprobe()
     if binario is None:
         raise HTTPException(503, "ffprobe no está instalado en el worker.")
@@ -42,14 +46,19 @@ async def analizar(request: Request) -> dict[str, Any]:
         try:
             metadatos = await run_in_threadpool(ffprobe.analizar, binario, temporal)
         except ffprobe.FfprobeError as ex:
-            raise HTTPException(422, str(ex)) from ex
+            metadatos, motivo = None, str(ex)
+        else:
+            motivo = None
 
     return {
         "sha256": hasheado.sha256,
         "tamanoBytes": hasheado.tamano_bytes,
-        "ffprobe": {
+        "ffprobe": None
+        if metadatos is None
+        else {
             "version": metadatos.version_ffprobe,
             "formato": metadatos.formato,
             "streams": metadatos.streams,
         },
+        "motivoSinMetadatos": motivo,
     }

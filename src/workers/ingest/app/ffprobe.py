@@ -38,18 +38,22 @@ def version(binario: str) -> str:
 
 
 def analizar(binario: str, archivo: Path) -> Metadatos:
-    salida = _ejecutar(
-        [
-            binario,
-            "-v",
-            "error",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            str(archivo),
-        ]
-    )
+    try:
+        salida = _ejecutar(
+            [
+                binario,
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-show_format",
+                "-show_streams",
+                str(archivo),
+            ]
+        )
+    except FfprobeError as ex:
+        # El motivo termina en el log de custodia: la ruta temporal del worker no es un dato de la evidencia.
+        raise FfprobeError(str(ex).replace(str(archivo), "<evidencia>")) from ex
     return interpretar(salida, version(binario))
 
 
