@@ -1,0 +1,193 @@
+# Sistema Forense de Imagen — Arquitectura y Roadmap
+
+> Versión original: 21 de octubre de 2026 · Yago Gomez. Este archivo es la fuente versionada; los cambios de diseño se hacen acá, por PR.
+
+Sistema open-source, on-premise y multi-analista para análisis forense de video/imagen, que reemplaza progresivamente a Amped FIVE en mejora de imagen, gestión de evidencia con cadena de custodia y analítica automática. Arquitectura híbrida: cliente de escritorio que usa la GPU NVIDIA local para el cómputo pesado, y un servidor central liviano que es la única fuente de verdad de la evidencia y la cadena de custodia.
+
+## Decisión y resumen ejecutivo
+
+**La cadena de custodia es la arquitectura, no un módulo.** En análisis forense el activo crítico no son los filtros — OpenCV y los modelos open-source igualan o superan a los de Amped FIVE — sino el registro inmutable y reproducible de qué se le hizo a cada imagen, con qué parámetros, por quién y cuándo. Todo el sistema se diseña alrededor de ese núcleo; los filtros y la IA son plugins.
+
+**Arquitectura elegida: híbrida (cliente de escritorio con GPU + servidor de custodia liviano).** El cómputo pesado corre en la workstation del analista, aprovechando su GPU NVIDIA sin costo de infraestructura. El servidor central no procesa imágenes: sólo custodia, versiona y audita. Cada operación que ejecuta el cliente se asienta en el servidor de forma inmutable (hash original, operación, parámetros, hash resultante, analista, timestamp). Así se obtienen las dos propiedades que estaban en tensión: máximo rédito de la GPU local y una cadena de custodia centralizada, única y defendible pericialmente.
+
+**Por qué .NET en el núcleo y Python en los workers.** La lógica forense (casos, evidencia, invariantes de custodia, auditoría) vive en .NET: tipado fuerte, EF Core para una persistencia auditable, y un dominio desacoplado de cualquier librería de imagen. El procesamiento (OpenCV, PyTorch, super-resolución) vive en workers Python, que es donde ese ecosistema es nativo. El núcleo nunca depende del motor de turno; hoy es OpenCV, mañana un modelo propio, y la custodia no se entera.
+
+**Por qué monolito modular y no microservicios.** Para un servidor interno con pocos analistas, los microservicios distribuirían la cadena de custodia — transacciones y auditoría repartidas — que es justo lo que no conviene fragmentar. Se arranca como monolito modular con bounded contexts bien separados; si un worker de IA necesitara escalar, se extrae después. No al revés.
+
+> **Nota legal y pericial:** este sistema reemplaza a Amped FIVE construyendo capacidades equivalentes con herramientas open-source y código propio. No depende de ingeniería inversa de Amped ni de ningún binario propietario — esa dependencia sería deuda técnica insostenible y, sobre todo, un vector de impugnación de la prueba en sede judicial.
+
+## Alcance y requisitos
+
+El sistema cubre tres frentes, en orden de prioridad de construcción: la gestión de evidencia con cadena de custodia primero (es el cimiento), luego la mejora de imagen, y por último la analítica automática.
+
+**Requisitos funcionales (RF):**
+
+1. Ingesta de evidencia con cálculo de hash (SHA-256) en el momento de entrada y verificación de integridad en cada lectura.
+2. Registro inmutable de cada operación forense: entrada, operación, parámetros, salida, analista y timestamp, encadenados (hash-chain).
+3. Gestión de casos: agrupación de evidencias, estados, asignación de analistas, control de acceso por caso.
+4. Mejora de imagen: deblur, denoise, super-resolución, corrección de perspectiva y geométrica, estabilización de video.
+5. Analítica: detección de objetos/personas/patentes, OCR, tracking, comparación — siempre como operaciones registradas, no como cajas negras.
+6. Reproducibilidad: desde el log, regenerar la salida a partir del original aplicando las mismas operaciones y parámetros.
+7. Informe pericial: exportar el historial completo de un caso con operaciones, parámetros, hashes y resultados.
+
+**Requisitos no funcionales (RNF):**
+
+1. Integridad y no-repudio: ninguna operación puede alterar el log sin dejar rastro detectable.
+2. On-premise, red interna aislada; sin dependencia de internet para operar.
+3. Multi-analista concurrente sobre el mismo repositorio de casos, con autorización por rol y por caso.
+4. Trazabilidad auditable por un tercero (perito de contraparte, juez) sin acceso al código.
+5. Determinismo donde sea posible: misma entrada y parámetros producen la misma salida, o se documenta explícitamente cuando un modelo no es determinista.
+
+**Fuera de alcance (por ahora):** analítica en tiempo real sobre streams en vivo, despliegue en cloud pública, y cualquier integración con Amped FIVE u otro software propietario. Se documentan aquí para fijar los límites, no porque se descarten para siempre.
+
+> **Decisión abierta:** el modelo de determinismo de los modelos de deep learning (misma GPU, misma versión de driver, seeds fijos) necesita una prueba de concepto temprana — es un requisito pericial sensible y conviene validarlo antes de comprometerse.
+
+## Arquitectura general
+
+El cómputo corre en el cliente y la custodia vive en el servidor. La workstation usa su GPU para procesar, pero cada paso que ejecuta queda asentado en el servidor de custodia, que no tiene GPU porque no procesa imágenes: sólo guarda, versiona y audita. La persistencia separa tres cosas que no deben mezclarse — metadatos de casos, los blobs de evidencia, y el log inmutable de operaciones.
+
+```mermaid
+flowchart TB
+    subgraph WS["Workstation del analista · GPU NVIDIA local"]
+        UI["UI de escritorio<br/>Avalonia (.NET)<br/>Visor, casos, operaciones"]
+        ORQ["Orquestador local<br/>Encola operaciones a workers<br/>Reporta cada paso al servidor"]
+        WK["Workers Python (GPU)<br/>OpenCV, PyTorch, Real-ESRGAN"]
+    end
+    subgraph SRV["Servidor de custodia · .NET, sin GPU, fuente de verdad"]
+        API["API REST (.NET)<br/>AuthN/Z por rol y por caso<br/>Valida toda entrada"]
+        DOM["Núcleo de dominio<br/>Casos, evidencia, operaciones<br/>Invariantes de custodia"]
+        AUD["Servicio de auditoría<br/>Hash-chain de operaciones<br/>No-repudio, append-only"]
+    end
+    subgraph PER["Persistencia on-premise"]
+        PG["PostgreSQL<br/>Casos y metadatos<br/>EF Core, transaccional"]
+        BLOB["Almacén de evidencia<br/>Blobs + SHA-256<br/>Originales inmutables"]
+        LOG["Log inmutable<br/>Append-only, encadenado<br/>Base del informe pericial"]
+    end
+    UI -- "HTTPS / mTLS" --> API
+    WK -- "asienta cada operación" --> AUD
+    DOM --> PER
+```
+
+El flujo típico: el analista abre una evidencia (el cliente verifica su hash contra el servidor), aplica una operación (un worker Python la ejecuta en la GPU), y el orquestador reporta al servidor qué se hizo, con qué parámetros y el hash del resultado. El servidor encadena ese registro al log. La imagen procesada puede guardarse donde convenga, pero el acta de lo que se hizo es única, central e inmutable.
+
+## Modelo de dominio forense
+
+El dominio tiene cuatro agregados y un puñado de invariantes que no se negocian. Esta es la parte que justifica DDD: estas reglas son el valor pericial del sistema y deben vivir aisladas de cualquier librería.
+
+**Agregados (raíces de consistencia):**
+
+| Agregado | Qué protege | Invariante principal |
+|---|---|---|
+| `Caso` | Expediente: evidencias, analistas asignados, estado | Una evidencia pertenece a un y sólo un caso; el acceso se autoriza a nivel de caso |
+| `Evidencia` | El original y sus derivados | El hash del original nunca cambia; los derivados siempre referencian su padre |
+| `OperacionForense` | Un paso de procesamiento aplicado | Es inmutable una vez registrada; guarda tipo, parámetros, hash de entrada y de salida |
+| `RegistroDeCustodia` | La cadena encadenada de operaciones | Append-only; cada registro incluye el hash del anterior (hash-chain) |
+
+**Invariantes de la cadena de custodia (reglas de negocio duras):**
+
+1. Toda evidencia que entra se hashea (SHA-256) antes de cualquier otra cosa. Sin hash, no hay ingesta.
+2. Ninguna operación modifica el original: siempre produce un derivado nuevo, con su propio hash.
+3. Cada `OperacionForense` registra entrada, operación, parámetros y salida de forma atómica con el asiento en el log. Si falla el asiento, la operación no ocurrió.
+4. El `RegistroDeCustodia` es append-only y encadenado: alterar un registro invalida el hash de todos los posteriores, haciendo la manipulación detectable.
+5. Toda operación lleva actor (analista autenticado) y timestamp del servidor, no del cliente.
+
+**Lenguaje ubicuo (para que el código hable como el perito):** se usan los términos del dominio forense — Evidencia, Derivado, Cadena de Custodia, Operación, Reproducción — no términos técnicos genéricos como «archivo» o «job». Esto no es cosmético: cuando un perito o un juez lea el informe o el código, los nombres deben coincidir con el vocabulario pericial.
+
+En Clean Architecture, estos agregados y reglas viven en la capa de dominio, sin una sola referencia a OpenCV, PyTorch, EF Core o ASP.NET. Los casos de uso (aplicación) orquestan; la infraestructura (persistencia, workers, API) implementa interfaces que el dominio define. Ese es el desacople que permite cambiar el motor de imagen sin tocar la custodia.
+
+## Stack tecnológico
+
+Todo open-source o gratuito, para no cambiar la dependencia de un propietario (Amped) por otra.
+
+| Capa | Tecnología | Rol | Por qué |
+|---|---|---|---|
+| UI escritorio | Avalonia (C#) | Visor, gestión de casos y operaciones | Multiplataforma, mismo lenguaje que el núcleo; WPF si es sólo Windows |
+| Núcleo / API | .NET 8 + ASP.NET Core | Dominio forense, API REST, auth | Tipado fuerte, maduro, stack principal |
+| Persistencia | EF Core + PostgreSQL | Casos, metadatos, log | Transaccional, auditable; el log encadenado se apoya en transacciones |
+| Mensajería | RabbitMQ o cola en PostgreSQL | Encolar operaciones a workers | Desacopla UI de cómputo; empezar con cola simple, crecer a RabbitMQ si hace falta |
+| Workers imagen | Python + FastAPI | Ejecutar operaciones en GPU | OpenCV y PyTorch son nativos aquí; FastAPI expone cada operación |
+| Visión clásica | OpenCV | Deblur, denoise, geometría, estabilización | Estándar de facto, determinista, auditable |
+| Superresolución | Real-ESRGAN / SwinIR | Mejora por deep learning | Modelos abiertos con pesos reproducibles |
+| Detección / OCR | YOLO (Ultralytics), Tesseract/PaddleOCR | Analítica automática | Abiertos, versión de pesos fijable para reproducibilidad |
+| Integridad | SHA-256 (hash-chain) | Cadena de custodia | Estándar criptográfico; la manipulación se vuelve detectable |
+| Contenedores | Docker | Empaquetar servidor y workers | Reproducibilidad de entorno, versión de modelos clavada en la imagen |
+| CI/CD | GitHub Actions o GitLab CI | Build, test, escaneo, release | Automatiza seguridad y calidad desde el día 1 |
+| Observabilidad | Serilog + OpenTelemetry + Grafana | Logs, trazas, métricas | Separar el log técnico del log de custodia (son cosas distintas) |
+
+> **Distinción importante:** el **log de custodia** (qué se le hizo a la evidencia) y el **log técnico/observabilidad** (qué hizo el sistema) son dos cosas separadas. Mezclarlos es un error de diseño común: el primero es prueba pericial e inmutable; el segundo es operacional y rotativo.
+
+## Seguridad y DevSecOps
+
+En un sistema forense la seguridad no es una capa que se agrega: la integridad de la evidencia ES el producto. Security by Design desde el primer commit.
+
+**Integridad y no-repudio de la evidencia (lo crítico):**
+
+1. Hash SHA-256 en ingesta y verificación en cada acceso; discrepancia = alerta y bloqueo.
+2. Log de custodia append-only con hash-chain: cada entrada encadena el hash de la anterior.
+3. Firma del log: considerar firmar periódicamente el estado de la cadena (p. ej. con una clave del laboratorio) para no-repudio reforzado.
+4. Timestamp del servidor, nunca del cliente, para evitar manipulación de la línea temporal.
+
+**Autenticación y autorización:**
+
+1. Identidad por analista (ver decisiones cerradas: módulo propio, sin Active Directory).
+2. Autorización por rol (analista, supervisor, auditor) y por caso: un analista sólo ve y opera sobre sus casos asignados.
+3. mTLS entre cliente y servidor en la red interna; los workers nunca se exponen fuera de la workstation.
+
+**OWASP Top 10 aplicado:**
+
+1. Validación estricta de toda entrada en la API (tipos de archivo, tamaños, metadatos) — la evidencia es entrada no confiable por definición.
+2. Control de acceso roto (A01): autorización verificada en servidor en cada operación, nunca confiando en la UI.
+3. Inyección (A03): consultas parametrizadas vía EF Core; los nombres de archivo nunca se interpolan en rutas ni comandos.
+4. Deserialización y componentes vulnerables (A06/A08): escaneo de dependencias (Dependabot, Trivy) en CI.
+5. Logging y monitoreo (A09): el log de custodia y el de seguridad cubren quién hizo qué.
+
+**Gestión de secretos:** nada de credenciales en código ni en imágenes Docker. Secretos en un gestor (variables de entorno inyectadas, HashiCorp Vault o Azure Key Vault si el entorno lo permite; en red aislada, un secreto cifrado en reposo con rotación documentada).
+
+**CI/CD con seguridad integrada:** build → test → SAST (análisis estático, p. ej. SonarQube/CodeQL) → escaneo de dependencias → escaneo de imagen Docker → firma de la imagen → release. Ningún artefacto llega a producción sin pasar los gates. Esto además da reproducibilidad: la versión exacta de cada modelo de IA queda clavada en la imagen firmada, lo que es un requisito pericial, no sólo una buena práctica.
+
+> **Punto pericial clave:** la reproducibilidad de los modelos de deep learning es un riesgo. Un modelo no determinista puede dar salidas ligeramente distintas entre corridas. La mitigación: fijar versión de modelo, pesos, seeds y entorno (imagen Docker), documentar el no-determinismo residual, y para la prueba pericial preferir operaciones deterministas (OpenCV) cuando el resultado deba ser exactamente reproducible.
+
+## Roadmap por fases
+
+El orden no es negociable: la cadena de custodia es la Fase 1. Construir primero los filtros y después la auditoría produce un sistema pericialmente impugnable. Cada fase entrega algo usable y pasa un gate verificable antes de habilitar la siguiente.
+
+| Fase | Alcance | Gate de salida |
+|---|---|---|
+| 1. Cimiento de custodia | Ingesta + hash SHA-256 + log encadenado + gestión de casos. Servidor .NET + PostgreSQL, sin UI todavía | Una evidencia se ingesta, hashea y audita de punta a punta |
+| 2. Mejora de imagen clásica | Workers Python/OpenCV: deblur, denoise, geometría. Cada operación se asienta en el log de custodia | Operación OpenCV registrada y reproducible al 100% |
+| 3. Cliente de escritorio + GPU | UI Avalonia, orquestador local, workers sobre GPU NVIDIA. Flujo completo del analista desde la workstation | El analista opera desde la UI usando la GPU local |
+| 4. Analítica e IA | Super-resolución, detección (YOLO), OCR, tracking. Versionado de modelos y pesos fijado en Docker | Modelo versionado con salida reproducible documentada |
+| 5. Informe pericial + endurecimiento | Export de la cadena, CI/CD con SAST, firma de imágenes. Auditoría de seguridad y validación por un tercero | Informe reproducible validado por un perito externo |
+
+Práctica recomendada: cerrar la Fase 1 con una demo real — ingestar una evidencia, verla auditada, y exportar su registro — aunque no haya un solo filtro todavía. Eso valida el cimiento antes de invertir en lo vistoso.
+
+## Riesgos, deuda técnica y decisiones abiertas
+
+Los riesgos ordenados por impacto pericial, que es el que más duele en este dominio.
+
+| Riesgo | Impacto | Mitigación |
+|---|---|---|
+| No-determinismo de modelos de IA | Alto (pericial) | Fijar versión/pesos/seed/entorno; preferir OpenCV cuando la reproducibilidad exacta sea requisito; documentar el no-determinismo residual |
+| Custodia en la workstation del cliente | Alto | El log vive en el servidor, no en el cliente; el cliente sólo reporta; verificación de hash en cada acceso |
+| Aceptación pericial de herramienta propia | Alto | Documentar algoritmos y versiones; validar contra resultados conocidos; auditoría por un tercero antes de uso judicial |
+| Reemplazar a Amped de golpe | Medio | Convivencia en fases tempranas; no apagar Amped hasta que el gate de la fase 5 esté validado |
+| Escalabilidad del cómputo | Medio | Monolito modular primero; extraer workers a servicio sólo si el volumen lo exige |
+| Dependencia de modelos open-source | Bajo-Medio | Clavar versiones en Docker; mirror interno de pesos para red aislada |
+
+**Deuda técnica a vigilar desde el inicio:**
+
+1. No acoplar el dominio a OpenCV/PyTorch: si una regla de custodia importa algo de infraestructura, es una señal de alarma.
+2. No mezclar log de custodia con log técnico: son ciclos de vida distintos.
+3. No confiar en timestamps ni validaciones del cliente: todo lo pericial se decide en el servidor.
+
+**Decisiones cerradas:**
+
+1. **Identidad y usuarios:** no hay Active Directory. La gestión de usuarios, roles y auditoría se hace dentro de la aplicación. Implica un módulo de identidad propio en el servidor .NET: usuarios, roles (analista, supervisor, auditor), contraseñas con hashing fuerte (Argon2 o bcrypt) y auditoría de accesos separada del log de custodia.
+2. **Formatos de ingesta prioritarios:** video e imagen de celulares; exportaciones de Milestone en MKV, AVI y MP4; y capturas de HikVision (patentes). Define un subsistema de ingesta con FFmpeg para normalizar contenedores y códecs y extraer frames, preservando siempre el original intacto y su hash.
+3. **Doble vía de procesamiento (decisión clave):** modelos deterministas (OpenCV) para lo que se presenta en la justicia; mejora con IA (super-resolución, modelos) sólo para investigación interna, nunca como prueba judicial, porque puede alterar la imagen y tumbar la prueba.
+5. **Control cruzado de la ingesta con el worker caído: se ingesta con el hash del servidor (decidido, Fase 1).** El worker de ingesta re-hashea los mismos bytes crudos que guardó el servidor, releídos con `AbrirVerificadoAsync`. Para la *integridad* ese cruce es redundante: la barrera real es el almacén, que hashea al escribir y verifica en cada lectura. Lo único que el worker aporta en exclusiva son los metadatos de ffprobe. Por eso un worker caído no impide tomar custodia: la ingesta procede sobre la fuente de verdad (el hash del almacén) y el asiento `EvidenciaIngestada` registra `controlCruzado: {estado: "pendiente"}` y `metadatos: null` con el motivo «worker de ingesta no disponible». El cruce se completa después con `POST /casos/{casoId}/evidencias/{evidenciaId}/control-cruzado`, que agrega un asiento `ControlCruzadoCompletado`: el de ingesta es inmutable, y como las tablas de custodia también lo son, el estado «pendiente» se deduce de la cadena. Se descartó la alternativa fail-closed (sin worker no hay ingesta, 503): es más simple, pero deja sin poder recibir evidencia por un componente que no protege la integridad.
+
+   Una **divergencia** (el worker responde con otro hash o tamaño) es otra cosa: como los bytes ya venían verificados, significa corrupción en tránsito o un worker roto o comprometido. Es un evento de seguridad: se registra con severidad crítica en el log técnico y la API responde 502, porque el problema está en el worker y no en el contenido del cliente. En la ingesta, la evidencia no se crea. Al completar un cruce pendiente, la divergencia queda asentada en la cadena y la evidencia ya custodiada no se toca. El 422 queda sólo para cuando el propio worker rechaza el contenido.
+6. **UI de escritorio: Avalonia (decidido).** Aunque el parque es 100% Windows, es la opción más flexible y mantenible: multiplataforma, moderno, activamente desarrollado, XAML casi idéntico a WPF y backend Skia ideal para el visor de imágenes con zoom y overlays. WPF queda como alternativa conservadora sólo si hiciera falta un control de terceros muy específico de Windows.
+
+> La doble vía asciende a **invariante del dominio**: todo derivado se clasifica como «admisible en juicio» (sólo cadena determinista) o «sólo investigación» (tocado por IA). La marca se propaga — cualquier derivado de un derivado «sólo investigación» hereda esa condición y nunca puede presentarse como prueba. El sistema debe hacer imposible confundir una vía con la otra.

@@ -1,0 +1,46 @@
+# Entorno local: PostgreSQL + servidor de custodia + worker de ingesta.
+# Credenciales en .env (ver .env.example), nunca en el repo. Todo escucha sólo en 127.0.0.1.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: forense
+      POSTGRES_USER: forense
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forense -d forense"]
+      interval: 5s
+      retries: 10
+
+  servidor:
+    build:
+      context: .
+      dockerfile: src/server/Dockerfile
+    environment:
+      # Development es obligatorio mientras no exista el módulo de identidad.
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Forense: Host=postgres;Database=forense;Username=forense;Password=${POSTGRES_PASSWORD}
+      # Control cruzado de cada ingesta. Con el worker caído se ingesta igual y el cruce queda pendiente.
+      WorkerIngesta__UrlBase: http://worker-ingest:8000
+    ports:
+      - "127.0.0.1:5065:8080"
+    volumes:
+      - evidencia:/datos/evidencia
+    depends_on:
+      postgres:
+        condition: service_healthy
+      worker-ingest:
+        condition: service_started
+
+  worker-ingest:
+    build: src/workers/ingest
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  postgres-datos:
+  evidencia:
