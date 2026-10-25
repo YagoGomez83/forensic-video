@@ -25,6 +25,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         o.Events = new JwtBearerEvents { OnTokenValidated = ValidacionDeSesion.ValidarAsync };
     });
 builder.Services.AddAuthorization(ValidacionDeSesion.Configurar);
+LimiteDeLogin.Registrar(builder.Services, builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IActorActual, ActorDelToken>();
 
@@ -45,6 +46,7 @@ using (var scope = app.Services.CreateScope())
     await SembrarAdminInicialAsync(scope.ServiceProvider, app.Configuration, app.Logger);
 }
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

@@ -283,4 +283,51 @@ public class IdentidadTests(ServidorForense servidor) : IClassFixture<ServidorFo
         var ex = Assert.ThrowsAny<Exception>(() => sinSeed.CreateClient());
         Assert.Contains("AdminInicial", ex.ToString());
     }
+
+    /// <summary>El mismo servidor y la misma base, con un límite de login bajo y su propio estado.</summary>
+    private (HttpClient DesdeA, HttpClient DesdeB, IDisposable Fabrica) ConLimiteDeLogin(int intentos)
+    {
+        var limitado = servidor.WithWebHostBuilder(b => b.UseSetting("Identidad:LimiteDeLogin:IntentosPorVentana", intentos.ToString()));
+        var desdeA = limitado.CreateClient();
+        desdeA.DefaultRequestHeaders.Add(IpDePrueba.Cabecera, "10.0.0.1");
+        var desdeB = limitado.CreateClient();
+        desdeB.DefaultRequestHeaders.Add(IpDePrueba.Cabecera, "10.0.0.2");
+        return (desdeA, desdeB, limitado);
+    }
+
+    [Fact]
+    public async Task Superado_el_limite_de_logins_por_ip_responde_429_aunque_la_contrasena_sea_correcta()
+    {
+        var nombre = NombreUnico("ivan");
+        await servidor.UsuarioConSesionAsync(nombre, Rol.Analista, "la contrasena de ivan");
+        var (desdeA, desdeB, fabrica) = ConLimiteDeLogin(3);
+        using var _ = fabrica;
+
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await desdeA.PostLoginAsync(nombre, "contrasena equivocada")).StatusCode);
+        var limitada = await desdeA.PostLoginAsync(nombre, "la contrasena de ivan");
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, limitada.StatusCode);
+        Assert.True(limitada.Headers.RetryAfter is not null);
+        // El límite es por IP: desde otra, el mismo usuario entra.
+        Assert.Equal(HttpStatusCode.OK, (await desdeB.PostLoginAsync(nombre, "la contrasena de ivan")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Una_rafaga_de_logins_en_paralelo_desde_una_ip_no_pasa_del_limite()
+    {
+        // El lockout por cuenta es débil ante concurrencia: el límite por IP es la defensa primaria.
+        var nombre = NombreUnico("rosa");
+        await servidor.UsuarioConSesionAsync(nombre, Rol.Analista);
+        var (desdeA, _, fabrica) = ConLimiteDeLogin(5);
+        using var __ = fabrica;
+
+        var respuestas = await Task.WhenAll(Enumerable.Range(0, 20)
+            .Select(i => desdeA.PostLoginAsync(nombre, $"intento paralelo {i:00}")));
+
+        Assert.Equal(5, respuestas.Count(r => r.StatusCode == HttpStatusCode.Unauthorized));
+        Assert.Equal(15, respuestas.Count(r => r.StatusCode == HttpStatusCode.TooManyRequests));
+        // Los rechazados por el límite ni siquiera llegan a verificar la contraseña.
+        Assert.True((await AuditoriaDeAsync(nombre)).Count(e => e.Tipo == "LoginFallido") <= 5);
+    }
 }

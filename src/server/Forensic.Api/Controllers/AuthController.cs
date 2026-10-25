@@ -2,6 +2,7 @@ using Forensic.Api.Identidad;
 using Forensic.Application.Identidad;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Forensic.Api.Controllers;
 
@@ -15,6 +16,7 @@ public sealed class AuthController(ServicioDeIdentidad identidad) : ControllerBa
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(LimiteDeLogin.Politica)]
     public Task<TokenEmitido> Login(LoginRequest req, CancellationToken ct) =>
         identidad.AutenticarAsync(req.Usuario, req.Contrasena, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
 
@@ -24,6 +26,7 @@ public sealed class AuthController(ServicioDeIdentidad identidad) : ControllerBa
     /// </summary>
     [HttpPost("contrasena")]
     [Authorize(Policy = ValidacionDeSesion.CambioDeContrasena)]
+    [EnableRateLimiting(LimiteDeLogin.Politica)]
     public Task<TokenEmitido> CambiarContrasena(CambioDeContrasenaRequest req, CancellationToken ct) =>
         identidad.CambiarContrasenaAsync(req.Actual, req.Nueva, ct);
 }

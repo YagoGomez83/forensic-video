@@ -53,10 +53,13 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
         builder.UseSetting("Identidad:Jwt:ClaveDeFirma", ClaveDeFirma);
         builder.UseSetting("Identidad:AdminInicial:Usuario", AdminInicial);
         builder.UseSetting("Identidad:AdminInicial:Contrasena", ContrasenaInicialDelAdmin);
+        // Los tests hacen muchos logins desde la misma "IP"; el límite se prueba aparte, con uno bajo.
+        builder.UseSetting("Identidad:LimiteDeLogin:IntentosPorVentana", "100000");
         builder.ConfigureTestServices(s =>
         {
             s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble());
             AutenticacionPorCabeceras.Registrar(s);
+            s.AddTransient<IStartupFilter, IpDePrueba>();
         });
     }
 
