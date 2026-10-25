@@ -23,7 +23,18 @@ internal sealed class WorkerDeIngestaHttp(HttpClient http) : IWorkerDeIngesta
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private sealed record Respuesta(string Sha256, long TamanoBytes, JsonElement? Ffprobe, string? MotivoSinMetadatos);
+    /// <summary>
+    /// Todos los campos son obligatorios, aunque valgan null: si falta uno, el contrato está roto y la
+    /// respuesta es inválida. Leerlo con su valor por defecto (un tamaño 0) se confundiría con una
+    /// divergencia, que es un evento de seguridad.
+    /// </summary>
+    private sealed record Respuesta
+    {
+        public required string Sha256 { get; init; }
+        public required long TamanoBytes { get; init; }
+        public required JsonElement? Ffprobe { get; init; }
+        public required string? MotivoSinMetadatos { get; init; }
+    }
 
     public async Task<AnalisisDeIngesta> AnalizarAsync(Stream contenido, CancellationToken ct)
     {

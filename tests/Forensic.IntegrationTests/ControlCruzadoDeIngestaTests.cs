@@ -270,4 +270,32 @@ public class ControlCruzadoDeIngestaTests(ServidorForense servidor) : IClassFixt
 
         Assert.All(await EvidenciasAsync(caso.Id), e => Assert.False(e.ControlCruzadoPendiente));
     }
+
+    [Theory]
+    [InlineData("sha256")]
+    [InlineData("tamanoBytes")]
+    [InlineData("ffprobe")]
+    [InlineData("motivoSinMetadatos")]
+    public async Task Una_respuesta_del_worker_sin_un_campo_es_invalida_y_no_una_divergencia(string campoAusente)
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        var bytes = RandomNumberGenerator.GetBytes(2048);
+        // Respuesta correcta para estos bytes, salvo por el campo que falta.
+        var respuesta = new Dictionary<string, object?>
+        {
+            ["sha256"] = HashSha256.Calcular(bytes).Hex,
+            ["tamanoBytes"] = bytes.Length,
+            ["ffprobe"] = WorkerDeIngestaDoble.Metadatos,
+            ["motivoSinMetadatos"] = null,
+        };
+        respuesta.Remove(campoAusente);
+        await using var incompleto = ConWorker(s => s.AddHttpClient<IWorkerDeIngesta, WorkerDeIngestaHttp>()
+            .ConfigurePrimaryHttpMessageHandler(() => new RespuestaFijaDelWorker(HttpStatusCode.OK, JsonSerializer.Serialize(respuesta))));
+
+        var evidencia = await (await incompleto.Ana.IngestarAsync(caso.Id, bytes)).LeerAsync<EvidenciaDto>();
+
+        Assert.False(incompleto.Logs.HayCriticos);
+        Assert.True(evidencia.ControlCruzadoPendiente);
+        Assert.Equal("pendiente", Detalle(await _ana.ExportarAsync(caso.Id), 1).GetProperty("controlCruzado").GetProperty("estado").GetString());
+    }
 }
