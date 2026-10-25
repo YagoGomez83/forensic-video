@@ -17,5 +17,7 @@ internal static class Fixtures
 
     public static HashSha256 HashDe(string contenido) => HashSha256.Calcular(System.Text.Encoding.UTF8.GetBytes(contenido));
 
+    public const string EntornoDePrueba = """{"opencv":"4.14.0","worker":"0.1.0"}""";
+
     public static Evidencia Original(Caso caso) => Evidencia.Ingestar(caso, HashDe("video"), 1024, "cam1.mp4", Ana, Ahora);
 }
