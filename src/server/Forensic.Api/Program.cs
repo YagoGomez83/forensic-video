@@ -32,7 +32,7 @@ app.UseStatusCodePages();
 if (app.Configuration.GetValue<bool>("Persistencia:MigrarAlIniciar"))
 {
     using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider.GetRequiredService<ContextoForense>().Database.MigrateAsync();
+    await Forensic.Infrastructure.DependencyInjection.MigrarAsync(scope.ServiceProvider);
 }
 
 app.MapControllers();
