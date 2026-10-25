@@ -21,9 +21,13 @@ services:
       context: .
       dockerfile: src/server/Dockerfile
     environment:
-      # Development es obligatorio mientras no exista el módulo de identidad.
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Forense: Host=postgres;Database=forense;Username=forense;Password=${POSTGRES_PASSWORD}
+      Persistencia__MigrarAlIniciar: "true"
+      # Sin clave de firma el servidor no arranca; sin ningún admin activo, tampoco sin el seed del primero.
+      Identidad__Jwt__ClaveDeFirma: ${JWT_CLAVE_DE_FIRMA:?Definí JWT_CLAVE_DE_FIRMA en .env}
+      Identidad__AdminInicial__Usuario: ${ADMIN_INICIAL_USUARIO:-}
+      Identidad__AdminInicial__Contrasena: ${ADMIN_INICIAL_CONTRASENA:-}
       # Control cruzado de cada ingesta. Con el worker caído se ingesta igual y el cruce queda pendiente.
       WorkerIngesta__UrlBase: http://worker-ingest:8000
     ports:
