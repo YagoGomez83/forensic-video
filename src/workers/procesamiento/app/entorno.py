@@ -15,14 +15,11 @@ import numpy as np
 
 HILOS = 1
 
-# Capacidades de CPU que OpenCV detecta (cv2.CPU_*). Con useOptimized=False no deberían influir;
-# se asientan igual para diagnosticar una reproducción fallida en otra máquina.
-_CAPACIDADES = ("SSE2", "SSE4_1", "SSE4_2", "AVX", "AVX2", "AVX_512F", "NEON")
-
 VERSION_WORKER = "0.1.0"
 
 
 def configurar() -> None:
+    """Se llama en el hilo que procesa: el uso de OpenCL es por hilo en OpenCV."""
     cv2.setNumThreads(HILOS)
     cv2.setUseOptimized(False)
     cv2.ocl.setUseOpenCL(False)
@@ -40,7 +37,9 @@ def descripcion() -> dict[str, Any]:
         "optimizado": cv2.useOptimized(),
         "opencl": cv2.ocl.useOpenCL(),
         "plataforma": f"{sys.platform}-{platform.machine()}",
-        "cpu": sorted(c for c in _CAPACIDADES if cv2.checkHardwareSupport(getattr(cv2, f"CPU_{c}", -1))),
+        # Capacidades de CPU según OpenCV: base compilada, despachables (*) y ausentes en esta CPU (?).
+        # Con useOptimized=False no deberían influir; se asientan para diagnosticar otra máquina.
+        "cpu": cv2.getCPUFeaturesLine(),
     }
 
 

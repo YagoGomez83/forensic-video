@@ -28,11 +28,19 @@ def codificar_png(pixeles: np.ndarray) -> bytes:
     return png.tobytes()
 
 
+_LECTURA = cv2.IMREAD_UNCHANGED | cv2.IMREAD_IGNORE_ORIENTATION
+
+
 def decodificar(contenido: bytes) -> np.ndarray:
-    """Decodifica tal cual: sin aplicar la orientación EXIF ni convertir profundidad o canales."""
-    pixeles = cv2.imdecode(
-        np.frombuffer(contenido, dtype=np.uint8), cv2.IMREAD_UNCHANGED | cv2.IMREAD_IGNORE_ORIENTATION
-    )
+    """Decodifica tal cual: sin aplicar la orientación EXIF ni convertir profundidad o canales.
+
+    Una imagen de varias páginas o animada se rechaza: elegir una página sería una decisión oculta.
+    """
+    buffer = np.frombuffer(contenido, dtype=np.uint8)
+    ok, paginas = cv2.imdecodemulti(buffer, _LECTURA)
+    if ok and len(paginas) > 1:
+        raise ImagenInvalida(f"La imagen tiene {len(paginas)} páginas o cuadros; se procesa una sola.")
+    pixeles = paginas[0] if ok and paginas else cv2.imdecode(buffer, _LECTURA)
     if pixeles is None:
         raise ImagenInvalida("El contenido no es una imagen que OpenCV pueda leer.")
     return pixeles

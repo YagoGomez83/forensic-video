@@ -42,6 +42,23 @@ jobs:
       - run: ruff format --check .
       - run: pytest
 
+  worker-procesamiento:
+    name: Worker de procesamiento (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/workers/procesamiento
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      # Incluye los hashes dorados del PNG: falla si el entorno de Linux no reproduce byte a byte.
+      - run: pytest
+
   imagenes:
     name: Imágenes Docker
     runs-on: ubuntu-latest
@@ -49,6 +66,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -f src/server/Dockerfile -t forensic-servidor:ci .
       - run: docker build -t forensic-worker-ingest:ci src/workers/ingest
+      - run: docker build -t forensic-worker-procesamiento:ci src/workers/procesamiento
 
   trivy:
     name: Escaneo Trivy (dependencias, secretos, configuración)
