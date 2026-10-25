@@ -99,4 +99,16 @@ public class CasoTests
 
         Assert.Throws<AccesoDenegadoException>(() => caso.ExigirCompletarControlCruzado(Auditor));
     }
+
+    [Fact]
+    public void Un_admin_administra_usuarios_pero_no_accede_a_casos()
+    {
+        var caso = CasoDeAna();
+
+        Assert.Throws<AccesoDenegadoException>(() => Caso.Abrir("EXP-2", "", Admin, Ahora));
+        Assert.False(caso.PuedeLeer(Admin));
+        Assert.False(caso.PuedeOperar(Admin));
+        Assert.False(caso.PuedeCompletarControlCruzado(Admin));
+        Assert.Throws<AccesoDenegadoException>(() => caso.AsignarAnalista("beto", Admin));
+    }
 }
