@@ -7,15 +7,19 @@ using Microsoft.Extensions.Logging;
 
 namespace Forensic.Application.Evidencias;
 
+/// <param name="ControlCruzadoPendiente">
+/// Si se ingestó con el worker caído y el cruce todavía no se completó.
+/// </param>
 public sealed record EvidenciaDto(
     Guid Id, Guid CasoId, string Hash, long TamanoBytes, string NombreOriginal, ViaProcesamiento Via,
-    Guid? PadreId, DateTimeOffset IngestadaEn, string IngestadaPor)
+    Guid? PadreId, DateTimeOffset IngestadaEn, string IngestadaPor, bool ControlCruzadoPendiente)
 {
-    internal static EvidenciaDto Desde(Evidencia e) =>
-        new(e.Id, e.CasoId, e.Hash.Hex, e.TamanoBytes, e.NombreOriginal, e.Via, e.PadreId, e.IngestadaEn, e.IngestadaPor);
+    internal static EvidenciaDto Desde(Evidencia e, bool controlCruzadoPendiente) =>
+        new(e.Id, e.CasoId, e.Hash.Hex, e.TamanoBytes, e.NombreOriginal, e.Via, e.PadreId, e.IngestadaEn, e.IngestadaPor,
+            controlCruzadoPendiente);
 }
 
-public sealed record ContenidoDeEvidencia(EvidenciaDto Evidencia, Stream Contenido);
+public sealed record ContenidoDeEvidencia(string Hash, string NombreOriginal, Stream Contenido);
 
 /// <param name="Resultado"><c>coincide</c> o <c>divergente</c>.</param>
 public sealed record ResultadoDeControlCruzado(Guid EvidenciaId, string Resultado, string Sha256Worker);
@@ -83,7 +87,7 @@ public sealed class ServicioDeEvidencias(
         persistencia.Agregar(evidencia);
         persistencia.Agregar(asiento);
         await persistencia.GuardarCambiosAsync(ct);
-        return EvidenciaDto.Desde(evidencia);
+        return EvidenciaDto.Desde(evidencia, controlCruzadoPendiente: analisis is null);
     }
 
     public async Task<IReadOnlyList<EvidenciaDto>> ListarAsync(Guid casoId, CancellationToken ct)
@@ -91,7 +95,8 @@ public sealed class ServicioDeEvidencias(
         var caso = await CargarCasoAsync(casoId, ct);
         caso.ExigirLectura(actorActual.Actor);
         var evidencias = await persistencia.ListarEvidenciasAsync(casoId, ct);
-        return evidencias.Select(EvidenciaDto.Desde).ToList();
+        var pendientes = ControlesCruzados.Pendientes(await persistencia.ObtenerCadenaAsync(casoId, ct));
+        return evidencias.Select(e => EvidenciaDto.Desde(e, pendientes.Contains(e.Id))).ToList();
     }
 
     /// <summary>
@@ -121,7 +126,7 @@ public sealed class ServicioDeEvidencias(
             await contenido.DisposeAsync();
             throw;
         }
-        return new ContenidoDeEvidencia(EvidenciaDto.Desde(evidencia), contenido);
+        return new ContenidoDeEvidencia(evidencia.Hash.Hex, evidencia.NombreOriginal, contenido);
     }
 
     /// <summary>

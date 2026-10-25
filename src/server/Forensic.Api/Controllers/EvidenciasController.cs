@@ -47,8 +47,8 @@ public sealed class EvidenciasController(ServicioDeEvidencias evidencias, IOptio
     [HttpGet("{evidenciaId:guid}/contenido")]
     public async Task<IActionResult> Contenido(Guid casoId, Guid evidenciaId, CancellationToken ct)
     {
-        var (evidencia, contenido) = await evidencias.AbrirAsync(casoId, evidenciaId, ct);
-        Response.Headers["X-Evidencia-Sha256"] = evidencia.Hash;
-        return File(contenido, "application/octet-stream", evidencia.NombreOriginal);
+        var (hash, nombreOriginal, contenido) = await evidencias.AbrirAsync(casoId, evidenciaId, ct);
+        Response.Headers["X-Evidencia-Sha256"] = hash;
+        return File(contenido, "application/octet-stream", nombreOriginal);
     }
 }

@@ -252,4 +252,22 @@ public class ControlCruzadoDeIngestaTests(ServidorForense servidor) : IClassFixt
         (await CompletarCruceAsync(_sofia, caso.Id, segunda.Id)).EnsureSuccessStatusCode();
         Assert.Equal(0, (await _sofia.ExportarAsync(caso.Id)).CrucesPendientes);
     }
+
+    [Fact]
+    public async Task El_listado_de_evidencias_marca_las_que_tienen_el_cruce_pendiente()
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        var cruzada = await (await _ana.IngestarAsync(caso.Id, RandomNumberGenerator.GetBytes(2048))).LeerAsync<EvidenciaDto>();
+        var pendiente = await IngestarConCrucePendienteAsync(caso.Id);
+        Assert.False(cruzada.ControlCruzadoPendiente);
+        Assert.True(pendiente.ControlCruzadoPendiente);
+
+        var antes = (await EvidenciasAsync(caso.Id)).ToDictionary(e => e.Id, e => e.ControlCruzadoPendiente);
+        Assert.False(antes[cruzada.Id]);
+        Assert.True(antes[pendiente.Id]);
+
+        (await CompletarCruceAsync(_ana, caso.Id, pendiente.Id)).EnsureSuccessStatusCode();
+
+        Assert.All(await EvidenciasAsync(caso.Id), e => Assert.False(e.ControlCruzadoPendiente));
+    }
 }
