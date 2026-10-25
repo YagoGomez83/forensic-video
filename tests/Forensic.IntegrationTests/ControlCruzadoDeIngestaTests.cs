@@ -24,6 +24,8 @@ public class ControlCruzadoDeIngestaTests(ServidorForense servidor) : IClassFixt
     private const string RechazoDelWorker = """{"detail":"contenido no admisible"}""";
 
     private readonly HttpClient _ana = servidor.ClienteDe("ana", Rol.Analista);
+    private readonly HttpClient _sofia = servidor.ClienteDe("sofia", Rol.Supervisor);
+    private readonly HttpClient _aurelio = servidor.ClienteDe("aurelio", Rol.Auditor);
 
     /// <summary>El mismo servidor (misma base y almacén) con otro worker de ingesta y su log técnico capturado.</summary>
     private sealed record ServidorAlternativo(WebApplicationFactory<Program> Fabrica, HttpClient Ana, RegistroDeLogs Logs)
@@ -53,6 +55,19 @@ public class ControlCruzadoDeIngestaTests(ServidorForense servidor) : IClassFixt
 
     private static JsonElement Detalle(ExportDeCustodia export, int indice) =>
         JsonDocument.Parse(export.Asientos[indice].Detalle).RootElement;
+
+    /// <summary>Ingesta con el worker caído: la evidencia queda con el control cruzado pendiente.</summary>
+    private async Task<EvidenciaDto> IngestarConCrucePendienteAsync(Guid casoId)
+    {
+        await using var sinWorker = SinWorker();
+        return await (await sinWorker.Ana.IngestarAsync(casoId, RandomNumberGenerator.GetBytes(2048))).LeerAsync<EvidenciaDto>();
+    }
+
+    private static Task<HttpResponseMessage> CompletarCruceAsync(HttpClient cliente, Guid casoId, Guid evidenciaId) =>
+        cliente.PostAsync($"/casos/{casoId}/evidencias/{evidenciaId}/control-cruzado", null);
+
+    private async Task CerrarAsync(Guid casoId) =>
+        (await _sofia.PostAsync($"/casos/{casoId}/cerrar", null)).EnsureSuccessStatusCode();
 
     private async Task<List<EvidenciaDto>> EvidenciasAsync(Guid casoId) =>
         await (await _ana.GetAsync($"/casos/{casoId}/evidencias")).LeerAsync<List<EvidenciaDto>>();
@@ -175,5 +190,66 @@ public class ControlCruzadoDeIngestaTests(ServidorForense servidor) : IClassFixt
         Assert.NotEqual(evidencia.Hash, detalle.GetProperty("sha256Worker").GetString());
         // La evidencia custodiada no se toca: su integridad la garantiza el almacén, no el worker.
         Assert.Equal(HttpStatusCode.OK, (await _ana.GetAsync($"/casos/{caso.Id}/evidencias/{evidencia.Id}/contenido")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Un_supervisor_completa_un_cruce_pendiente_con_el_caso_cerrado()
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        var evidencia = await IngestarConCrucePendienteAsync(caso.Id);
+        await CerrarAsync(caso.Id);
+
+        Assert.Equal(HttpStatusCode.OK, (await CompletarCruceAsync(_sofia, caso.Id, evidencia.Id)).StatusCode);
+
+        var export = await _sofia.ExportarAsync(caso.Id);
+        Assert.True(export.Verificacion.EsIntegra, export.Verificacion.Motivo);
+        Assert.Equal(["CasoAbierto", "EvidenciaIngestada", "CasoCerrado", "ControlCruzadoCompletado"], export.Asientos.Select(a => a.Tipo));
+        Assert.Equal("sofia", export.Asientos[^1].Actor);
+        Assert.Equal("coincide", Detalle(export, 3).GetProperty("resultado").GetString());
+    }
+
+    [Fact]
+    public async Task Con_el_caso_cerrado_el_analista_asignado_ya_no_completa_el_cruce()
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        var evidencia = await IngestarConCrucePendienteAsync(caso.Id);
+        await CerrarAsync(caso.Id);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await CompletarCruceAsync(_ana, caso.Id, evidencia.Id)).StatusCode);
+        Assert.Equal(1, (await _ana.ExportarAsync(caso.Id)).CrucesPendientes);
+    }
+
+    [Fact]
+    public async Task Un_auditor_no_completa_cruces_ni_con_el_caso_abierto_ni_cerrado()
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        var evidencia = await IngestarConCrucePendienteAsync(caso.Id);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await CompletarCruceAsync(_aurelio, caso.Id, evidencia.Id)).StatusCode);
+        await CerrarAsync(caso.Id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await CompletarCruceAsync(_aurelio, caso.Id, evidencia.Id)).StatusCode);
+        Assert.Equal(1, (await _ana.ExportarAsync(caso.Id)).CrucesPendientes);
+    }
+
+    [Fact]
+    public async Task Los_cruces_pendientes_no_bloquean_el_cierre_y_quedan_a_la_vista()
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        await _ana.IngestarAsync(caso.Id, RandomNumberGenerator.GetBytes(2048));
+        var primera = await IngestarConCrucePendienteAsync(caso.Id);
+        var segunda = await IngestarConCrucePendienteAsync(caso.Id);
+        Assert.Equal(2, (await _ana.ExportarAsync(caso.Id)).CrucesPendientes);
+
+        await CerrarAsync(caso.Id);
+
+        // El cierre deja asentado con cuántos cruces pendientes se cerró el caso.
+        var alCerrar = await _sofia.ExportarAsync(caso.Id);
+        Assert.Equal("CasoCerrado", alCerrar.Asientos[^1].Tipo);
+        Assert.Equal(2, Detalle(alCerrar, alCerrar.Asientos.Count - 1).GetProperty("crucesPendientes").GetInt32());
+
+        (await CompletarCruceAsync(_sofia, caso.Id, primera.Id)).EnsureSuccessStatusCode();
+        Assert.Equal(1, (await _sofia.ExportarAsync(caso.Id)).CrucesPendientes);
+        (await CompletarCruceAsync(_sofia, caso.Id, segunda.Id)).EnsureSuccessStatusCode();
+        Assert.Equal(0, (await _sofia.ExportarAsync(caso.Id)).CrucesPendientes);
     }
 }

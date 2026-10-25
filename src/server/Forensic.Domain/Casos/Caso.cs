@@ -88,6 +88,14 @@ public sealed class Caso
         && actor.Rol == Rol.Analista
         && _analistasAsignados.Contains(actor.Usuario);
 
+    /// <summary>
+    /// Completar un control cruzado pendiente es aditivo y no investigativo: relee un blob ya
+    /// verificado y asienta el resultado del worker. Por eso, además de quien puede operar, lo puede
+    /// hacer un supervisor en cualquier estado del caso, incluido cerrado. El auditor nunca escribe.
+    /// </summary>
+    public bool PuedeCompletarControlCruzado(Actor actor) =>
+        PuedeOperar(actor) || actor.Rol == Rol.Supervisor;
+
     public void ExigirLectura(Actor actor)
     {
         if (!PuedeLeer(actor))
@@ -99,6 +107,13 @@ public sealed class Caso
         if (!PuedeOperar(actor))
             throw new AccesoDenegadoException(
                 $"'{actor.Usuario}' no puede operar sobre el caso {NumeroExpediente} (estado {Estado}).");
+    }
+
+    public void ExigirCompletarControlCruzado(Actor actor)
+    {
+        if (!PuedeCompletarControlCruzado(actor))
+            throw new AccesoDenegadoException(
+                $"'{actor.Usuario}' no puede completar controles cruzados en el caso {NumeroExpediente} (estado {Estado}).");
     }
 
     private void ExigirAbierto()

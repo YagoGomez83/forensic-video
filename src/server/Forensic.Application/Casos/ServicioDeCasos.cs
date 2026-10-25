@@ -55,12 +55,17 @@ public sealed class ServicioDeCasos(IPersistenciaForense persistencia, IActorAct
         return CasoDto.Desde(caso);
     }
 
+    /// <summary>
+    /// Los controles cruzados pendientes no bloquean el cierre (lo acoplarían a que el worker esté
+    /// disponible): el asiento registra cuántos quedaban, y un supervisor puede completarlos después.
+    /// </summary>
     public async Task<CasoDto> CerrarAsync(Guid casoId, CancellationToken ct)
     {
         var caso = await CargarAsync(casoId, ct);
         caso.Cerrar(actorActual.Actor);
 
-        await AsentarAsync(caso, TipoAsiento.CasoCerrado, "{}", ct);
+        var crucesPendientes = ControlesCruzados.Pendientes(await persistencia.ObtenerCadenaAsync(casoId, ct)).Count;
+        await AsentarAsync(caso, TipoAsiento.CasoCerrado, DetalleDeAsiento.Serializar(new { crucesPendientes }), ct);
         return CasoDto.Desde(caso);
     }
 

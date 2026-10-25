@@ -13,10 +13,12 @@ public sealed record VerificacionDto(bool EsIntegra, int CantidadAsientos, strin
 /// Export del registro de custodia de un caso: todos los asientos con sus hashes y el resultado
 /// de verificar la cadena. Base del informe pericial; un tercero puede reverificarlo sin el código
 /// siguiendo el formato canónico documentado en <see cref="AsientoDeCustodia"/>.
+/// <paramref name="CrucesPendientes"/> cuenta las evidencias cuyo control cruzado de ingesta sigue
+/// pendiente: un caso cerrado con pendientes se ve marcado, nunca silenciosamente incompleto.
 /// </summary>
 public sealed record ExportDeCustodia(
     string Formato, DateTimeOffset GeneradoEn, string GeneradoPor, CasoDto Caso,
-    IReadOnlyList<AsientoDto> Asientos, VerificacionDto Verificacion);
+    IReadOnlyList<AsientoDto> Asientos, VerificacionDto Verificacion, int CrucesPendientes);
 
 public sealed class ServicioDeCustodia(IPersistenciaForense persistencia, IActorActual actorActual, TimeProvider reloj)
 {
@@ -40,6 +42,7 @@ public sealed class ServicioDeCustodia(IPersistenciaForense persistencia, IActor
                 a.Timestamp, a.HashAnterior.Hex, a.Hash.Hex)).ToList(),
             new VerificacionDto(
                 verificacion.EsIntegra, verificacion.CantidadAsientos, verificacion.HashFinal?.Hex,
-                verificacion.SecuenciaRota, verificacion.Motivo));
+                verificacion.SecuenciaRota, verificacion.Motivo),
+            ControlesCruzados.Pendientes(cadena).Count);
     }
 }

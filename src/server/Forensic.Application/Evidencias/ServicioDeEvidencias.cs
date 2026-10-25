@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Forensic.Application.Custodia;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
@@ -29,7 +28,6 @@ public sealed class ServicioDeEvidencias(
     TimeProvider reloj,
     ILogger<ServicioDeEvidencias> logger)
 {
-    private const string Pendiente = "pendiente";
     private const string WorkerNoDisponible = "worker de ingesta no disponible";
 
     /// <summary>
@@ -75,7 +73,7 @@ public sealed class ServicioDeEvidencias(
                 evidencia.NombreOriginal,
                 via = evidencia.Via.ToString(),
                 controlCruzado = analisis is null
-                    ? (object)new { estado = Pendiente }
+                    ? (object)new { estado = ControlesCruzados.Pendiente }
                     : new { estado = "coincide", sha256Worker = analisis.Hash.Hex, tamanoBytesWorker = analisis.TamanoBytes },
                 metadatos = analisis?.Metadatos,
                 motivoSinMetadatos = analisis is null ? WorkerNoDisponible : analisis.MotivoSinMetadatos,
@@ -130,18 +128,19 @@ public sealed class ServicioDeEvidencias(
     /// Completa un control cruzado que quedó pendiente porque el worker no respondió al ingestar.
     /// El resultado va en un asiento nuevo (el de ingesta es inmutable). Si el worker discrepa, la
     /// divergencia se asienta igual y se lanza <see cref="DivergenciaDeControlCruzadoException"/>:
-    /// la evidencia no se toca, porque su integridad la garantiza el almacén.
+    /// la evidencia no se toca, porque su integridad la garantiza el almacén. Un supervisor puede
+    /// completarlo aunque el caso esté cerrado (ver <see cref="Caso.PuedeCompletarControlCruzado"/>).
     /// </summary>
     public async Task<ResultadoDeControlCruzado> CompletarControlCruzadoAsync(Guid casoId, Guid evidenciaId, CancellationToken ct)
     {
         var actor = actorActual.Actor;
         var caso = await CargarCasoAsync(casoId, ct);
-        caso.ExigirOperacion(actor);
+        caso.ExigirCompletarControlCruzado(actor);
         var evidencia = await persistencia.ObtenerEvidenciaAsync(casoId, evidenciaId, ct)
             ?? throw new NoEncontradoException($"No existe la evidencia {evidenciaId} en el caso.");
 
         var cadena = await persistencia.ObtenerCadenaAsync(casoId, ct);
-        if (!ControlCruzadoPendiente(cadena, evidencia.Id))
+        if (!ControlesCruzados.Pendientes(cadena).Contains(evidencia.Id))
             throw new ExcepcionDeDominio($"La evidencia {evidenciaId} no tiene un control cruzado pendiente.");
 
         var analisis = await AnalizarAsync(evidencia.Hash, ct);
@@ -194,24 +193,6 @@ public sealed class ServicioDeEvidencias(
         return new DivergenciaDeControlCruzadoException(
             $"El worker de ingesta reportó {analisis.Hash} ({analisis.TamanoBytes} bytes) para bytes verificados " +
             $"{hash} ({tamanoBytes} bytes).");
-    }
-
-    /// <summary>
-    /// Las tablas de custodia son inmutables, así que el estado del cruce se deduce de la cadena: el
-    /// asiento de ingesta lo dejó pendiente y todavía no hay un asiento que lo complete.
-    /// </summary>
-    private static bool ControlCruzadoPendiente(IReadOnlyList<AsientoDeCustodia> cadena, Guid evidenciaId)
-    {
-        var propios = cadena.Where(a => a.EvidenciaId == evidenciaId).ToList();
-        if (propios.Any(a => a.Tipo == TipoAsiento.ControlCruzadoCompletado))
-            return false;
-        var ingesta = propios.SingleOrDefault(a => a.Tipo == TipoAsiento.EvidenciaIngestada);
-        if (ingesta is null)
-            return false;
-        using var detalle = JsonDocument.Parse(ingesta.Detalle);
-        return detalle.RootElement.TryGetProperty("controlCruzado", out var control)
-            && control.TryGetProperty("estado", out var estado)
-            && estado.GetString() == Pendiente;
     }
 
     private async Task<Caso> CargarCasoAsync(Guid casoId, CancellationToken ct) =>

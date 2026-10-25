@@ -63,4 +63,40 @@ public class CasoTests
         Assert.False(caso.PuedeOperar(Ana));
         Assert.Throws<ExcepcionDeDominio>(() => caso.AsignarAnalista("beto", Supervisora));
     }
+
+    [Fact]
+    public void Un_supervisor_completa_cruces_pendientes_aunque_el_caso_este_cerrado()
+    {
+        var caso = CasoDeAna();
+        Assert.True(caso.PuedeCompletarControlCruzado(Supervisora));
+
+        caso.Cerrar(Supervisora);
+
+        Assert.True(caso.PuedeCompletarControlCruzado(Supervisora));
+        caso.ExigirCompletarControlCruzado(Supervisora);
+    }
+
+    [Fact]
+    public void El_analista_asignado_completa_cruces_solo_con_el_caso_abierto()
+    {
+        var caso = CasoDeAna();
+        Assert.True(caso.PuedeCompletarControlCruzado(Ana));
+        Assert.False(caso.PuedeCompletarControlCruzado(Beto));
+
+        caso.Cerrar(Supervisora);
+
+        Assert.False(caso.PuedeCompletarControlCruzado(Ana));
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirCompletarControlCruzado(Ana));
+    }
+
+    [Fact]
+    public void Un_auditor_nunca_completa_cruces()
+    {
+        var caso = CasoDeAna();
+        Assert.False(caso.PuedeCompletarControlCruzado(Auditor));
+
+        caso.Cerrar(Supervisora);
+
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirCompletarControlCruzado(Auditor));
+    }
 }
