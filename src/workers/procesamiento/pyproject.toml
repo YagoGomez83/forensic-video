@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forensic-procesamiento-worker"
+version = "0.1.0"
+description = "Worker de procesamiento: operaciones deterministas de OpenCV que producen derivados PNG reproducibles."
+requires-python = ">=3.12"
+# Versiones exactas: la reproducibilidad byte a byte de cada derivado depende de ellas.
+dependencies = [
+    "fastapi==0.160.0",
+    "uvicorn==0.54.0",
+    "python-multipart==0.0.32",
+    "numpy==2.5.4",
+    "opencv-python-headless==4.14.0.94",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx==0.28.1",
+    "pytest==9.1.1",
+    "ruff==0.17.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S108", "S603"]
