@@ -1,6 +1,7 @@
 using Forensic.Application.Casos;
 using Forensic.Application.Custodia;
 using Forensic.Application.Evidencias;
+using Forensic.Application.Identidad;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Forensic.Application;
@@ -14,6 +15,7 @@ public static class DependencyInjection
         services.AddScoped<ServicioDeCasos>();
         services.AddScoped<ServicioDeEvidencias>();
         services.AddScoped<ServicioDeCustodia>();
+        services.AddScoped<ServicioDeIdentidad>();
         return services;
     }
 }

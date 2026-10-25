@@ -32,8 +32,8 @@ public sealed class Caso
 
     public static Caso Abrir(string numeroExpediente, string descripcion, Actor actor, DateTimeOffset ahora)
     {
-        if (actor.Rol == Rol.Auditor)
-            throw new AccesoDenegadoException("Un auditor no puede abrir casos.");
+        if (actor.Rol is Rol.Auditor or Rol.Admin)
+            throw new AccesoDenegadoException($"Un {actor.Rol.ToString().ToLowerInvariant()} no puede abrir casos.");
         if (string.IsNullOrWhiteSpace(numeroExpediente) || numeroExpediente.Length > 100)
             throw new ExcepcionDeDominio("El número de expediente es obligatorio y de hasta 100 caracteres.");
         if (descripcion is null || descripcion.Length > 2000)
@@ -74,7 +74,10 @@ public sealed class Caso
         Estado = EstadoCaso.Cerrado;
     }
 
-    /// <summary>Supervisores y auditores leen todos los casos; un analista, sólo los asignados.</summary>
+    /// <summary>
+    /// Supervisores y auditores leen todos los casos; un analista, sólo los asignados. El admin
+    /// administra usuarios y no accede a casos.
+    /// </summary>
     public bool PuedeLeer(Actor actor) => actor.Rol switch
     {
         Rol.Supervisor or Rol.Auditor => true,

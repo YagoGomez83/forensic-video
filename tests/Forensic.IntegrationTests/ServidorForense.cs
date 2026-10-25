@@ -3,10 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Forensic.Api.Controllers;
-using Forensic.Api.Identidad;
 using Forensic.Application;
 using Forensic.Application.Casos;
 using Forensic.Application.Custodia;
+using Forensic.Application.Identidad;
 using Forensic.Domain.Comun;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -50,20 +50,87 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
         builder.UseSetting("ConnectionStrings:Forense", _postgres.GetConnectionString());
         builder.UseSetting("AlmacenDeEvidencia:RutaRaiz", RutaAlmacen);
         builder.UseSetting("Persistencia:MigrarAlIniciar", "true");
-        builder.ConfigureTestServices(s => s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble()));
+        builder.UseSetting("Identidad:Jwt:ClaveDeFirma", ClaveDeFirma);
+        builder.UseSetting("Identidad:AdminInicial:Usuario", AdminInicial);
+        builder.UseSetting("Identidad:AdminInicial:Contrasena", ContrasenaInicialDelAdmin);
+        // Los tests hacen muchos logins desde la misma "IP"; el límite se prueba aparte, con uno bajo.
+        builder.UseSetting("Identidad:LimiteDeLogin:IntentosPorVentana", "100000");
+        builder.ConfigureTestServices(s =>
+        {
+            s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble());
+            AutenticacionPorCabeceras.Registrar(s);
+            s.AddTransient<IStartupFilter, IpDePrueba>();
+        });
     }
 
+    /// <summary>Sólo de tests. En un entorno real la clave viene de secretos.</summary>
+    public const string ClaveDeFirma = "clave-de-firma-solo-para-tests-0123456789";
+    public const string AdminInicial = "adela";
+    public const string ContrasenaInicialDelAdmin = "contrasena inicial del admin";
+    public const string ContrasenaDelAdmin = "la del admin ya cambiada";
+
+    private readonly SemaphoreSlim _sesionDelAdmin = new(1, 1);
+    private string? _tokenDelAdmin;
+
     public HttpClient ClienteDe(string usuario, Rol rol) => CreateClient().ComoActor(usuario, rol);
+
+    public HttpClient ClienteConToken(string token)
+    {
+        var cliente = CreateClient();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return cliente;
+    }
+
+    /// <summary>
+    /// El admin sembrado, ya con su contraseña cambiada (la inicial sólo sirve para cambiarla). Se
+    /// hace una sola vez por servidor.
+    /// </summary>
+    public async Task<HttpClient> AdminAsync()
+    {
+        await _sesionDelAdmin.WaitAsync();
+        try
+        {
+            if (_tokenDelAdmin is null)
+            {
+                var inicial = await CreateClient().LoginAsync(AdminInicial, ContrasenaInicialDelAdmin);
+                _tokenDelAdmin = (await ClienteConToken(inicial.Token).CambiarContrasenaAsync(ContrasenaInicialDelAdmin, ContrasenaDelAdmin)).Token;
+            }
+            return ClienteConToken(_tokenDelAdmin);
+        }
+        finally
+        {
+            _sesionDelAdmin.Release();
+        }
+    }
+
+    /// <summary>Un usuario creado por el admin que ya cambió su contraseña inicial: sesión completa.</summary>
+    public async Task<HttpClient> UsuarioConSesionAsync(string usuario, Rol rol, string contrasena = "contrasena definitiva 2026")
+    {
+        var admin = await AdminAsync();
+        const string inicial = "contrasena temporal 2026";
+        (await admin.PostAsJsonAsync("/usuarios", new CrearUsuarioRequest(usuario, rol, inicial), Json)).EnsureSuccessStatusCode();
+        var token = await CreateClient().LoginAsync(usuario, inicial);
+        return ClienteConToken((await ClienteConToken(token.Token).CambiarContrasenaAsync(inicial, contrasena)).Token);
+    }
 }
 
 internal static class HttpExtensiones
 {
     public static HttpClient ComoActor(this HttpClient cliente, string usuario, Rol rol)
     {
-        cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraUsuario, usuario);
-        cliente.DefaultRequestHeaders.Add(ActorDeDesarrollo.CabeceraRol, rol.ToString());
+        cliente.DefaultRequestHeaders.Add(AutenticacionPorCabeceras.CabeceraUsuario, usuario);
+        cliente.DefaultRequestHeaders.Add(AutenticacionPorCabeceras.CabeceraRol, rol.ToString());
         return cliente;
     }
+
+    public static Task<HttpResponseMessage> PostLoginAsync(this HttpClient cliente, string usuario, string contrasena) =>
+        cliente.PostAsJsonAsync("/auth/login", new LoginRequest(usuario, contrasena));
+
+    public static async Task<TokenEmitido> LoginAsync(this HttpClient cliente, string usuario, string contrasena) =>
+        await (await cliente.PostLoginAsync(usuario, contrasena)).LeerAsync<TokenEmitido>();
+
+    public static async Task<TokenEmitido> CambiarContrasenaAsync(this HttpClient cliente, string actual, string nueva) =>
+        await (await cliente.PostAsJsonAsync("/auth/contrasena", new CambioDeContrasenaRequest(actual, nueva))).LeerAsync<TokenEmitido>();
 
     public static async Task<CasoDto> AbrirCasoAsync(this HttpClient cliente) =>
         await (await cliente.PostAsJsonAsync("/casos", new AbrirCasoRequest($"EXP-{Guid.NewGuid():N}"[..20], "Prueba")))

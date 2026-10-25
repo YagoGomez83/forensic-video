@@ -5,6 +5,8 @@ public enum Rol
     Analista = 1,
     Supervisor = 2,
     Auditor = 3,
+    /// <summary>Administra usuarios y roles. No accede a casos (separación de funciones).</summary>
+    Admin = 4,
 }
 
 /// <summary>Usuario autenticado que ejecuta una acción. Lo determina siempre el servidor.</summary>

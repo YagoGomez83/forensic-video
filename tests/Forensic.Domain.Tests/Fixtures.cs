@@ -11,6 +11,7 @@ internal static class Fixtures
     public static readonly Actor Beto = new("beto", Rol.Analista);
     public static readonly Actor Supervisora = new("sofia", Rol.Supervisor);
     public static readonly Actor Auditor = new("aurelio", Rol.Auditor);
+    public static readonly Actor Admin = new("adela", Rol.Admin);
 
     public static Caso CasoDeAna() => Caso.Abrir("EXP-2026-001", "Robo en Av. Siempreviva", Ana, Ahora);
 

@@ -13,6 +13,9 @@ internal sealed class ManejadorDeErrores(IProblemDetailsService problemDetails) 
         (int status, string titulo)? mapeo = exception switch
         {
             NoAutenticadoException => (StatusCodes.Status401Unauthorized, "No autenticado"),
+            // Mismo título y mensaje para cualquier rechazo de login.
+            CredencialesInvalidasException => (StatusCodes.Status401Unauthorized, "No autenticado"),
+            ConflictoDeIdentidadException => (StatusCodes.Status409Conflict, "Conflicto al modificar el usuario"),
             AccesoDenegadoException => (StatusCodes.Status403Forbidden, "Acceso denegado"),
             NoEncontradoException => (StatusCodes.Status404NotFound, "No encontrado"),
             ConflictoDeCustodiaException => (StatusCodes.Status409Conflict, "Conflicto en la cadena de custodia"),

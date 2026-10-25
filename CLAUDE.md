@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Estado del repositorio
 
-Fase 1: servidor de custodia .NET 8 (`src/server`) y primer worker Python de ingesta (`src/workers/ingest`). `client/` (Avalonia) llega en la Fase 3. Todavía no existe el módulo de identidad.
+Fase 1: servidor de custodia .NET 8 (`src/server`) y primer worker Python de ingesta (`src/workers/ingest`). `client/` (Avalonia) llega en la Fase 3. Fase 1.5: módulo de identidad (usuarios, login JWT, auditoría de accesos).
 
 La fuente de diseño es `docs/architecture.md`; los cambios de diseño se hacen ahí. Lo que sigue resume lo que condiciona el código.
 
@@ -17,8 +17,9 @@ dotnet test src/server/Forensic.sln               # todo; los de integración re
 dotnet test tests/Forensic.Domain.Tests           # sólo dominio, sin Docker
 dotnet test src/server/Forensic.sln --filter "FullyQualifiedName~RegistroDeCustodiaTests.Eliminar_un_asiento_intermedio_se_detecta"
 
-# Migraciones (dotnet-ef global). Revisar el SQL generado: los triggers van a mano.
-dotnet ef migrations add <Nombre> --project src/server/Forensic.Infrastructure --output-dir Persistencia/Migraciones
+# Migraciones (dotnet-ef global). Revisar el SQL generado: los triggers van a mano. Dos contextos, cada uno con las suyas.
+dotnet ef migrations add <Nombre> --project src/server/Forensic.Infrastructure --context ContextoForense --output-dir Persistencia/Migraciones
+dotnet ef migrations add <Nombre> --project src/server/Forensic.Infrastructure --context ContextoDeIdentidad --output-dir Identidad/Migraciones
 
 # Worker de ingesta (Python 3.12, desde src/workers/ingest)
 py -3.12 -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
@@ -26,11 +27,14 @@ py -3.12 -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
 .venv/Scripts/python -m ruff check . && .venv/Scripts/python -m ruff format --check .
 
 # Todo en local con Docker
-cp .env.example .env                              # definir POSTGRES_PASSWORD
+cp .env.example .env                              # definir POSTGRES_PASSWORD, JWT_CLAVE_DE_FIRMA y el seed del primer admin
 docker compose up -d --build                      # servidor :5065, worker :8000, PostgreSQL :5433 (sólo 127.0.0.1)
 
 # O el servidor fuera de Docker, contra el PostgreSQL del compose
 dotnet user-secrets set "ConnectionStrings:Forense" "Host=localhost;Port=5433;Database=forense;Username=forense;Password=<la de .env>" --project src/server/Forensic.Api
+dotnet user-secrets set "Identidad:Jwt:ClaveDeFirma" "<32+ bytes>" --project src/server/Forensic.Api
+dotnet user-secrets set "Identidad:AdminInicial:Usuario" "<admin>" --project src/server/Forensic.Api
+dotnet user-secrets set "Identidad:AdminInicial:Contrasena" "<12+ caracteres>" --project src/server/Forensic.Api
 dotnet run --project src/server/Forensic.Api      # http://localhost:5065, migra al iniciar en Development
 ```
 
@@ -46,7 +50,11 @@ Las versiones NuGet están centralizadas en `Directory.Packages.props` (los `.cs
 - `src/workers/ingest`: FastAPI. `POST /v1/analizar` recibe el archivo en crudo y devuelve SHA-256 + metadatos de ffprobe. Su hash es un control cruzado sobre **los mismos bytes crudos** que hashea el servidor: si el worker llegara a normalizar, reporta el hash del crudo de entrada, nunca el de su salida. La fuente de verdad es el hash que calcula el servidor al ingestar. `ServicioDeEvidencias` guarda el crudo, lo relee verificado del almacén y se lo pasa al worker; recién después crea la evidencia y el asiento, cuyo detalle guarda el hash del worker y los metadatos. Una divergencia (el worker reporta otro hash sobre bytes ya verificados) es un evento de seguridad: `DivergenciaDeControlCruzadoException`, `LogCritical`, 502 y no hay ingesta. Si el worker no responde, la ingesta procede con `controlCruzado.estado = "pendiente"` y se completa después con `POST .../evidencias/{id}/control-cruzado`, que agrega un asiento `ControlCruzadoCompletado`; lo puede completar el analista asignado con el caso abierto o un supervisor aunque el caso esté cerrado, y los pendientes no bloquean el cierre (`crucesPendientes` en el asiento `CasoCerrado` y en el export; `controlCruzadoPendiente` por evidencia en el listado) (decisión 5 de "Decisiones cerradas" en `docs/architecture.md`). Si ffprobe no reconoce el formato, la evidencia se custodia igual con `metadatos: null` y `motivoSinMetadatos`. ffprobe se invoca con una lista de argumentos sobre una ruta temporal propia, nunca con el nombre de la evidencia.
 
 Detalles que no se ven a simple vista:
-- **Identidad provisoria:** `ActorDeDesarrollo` lee las cabeceras `X-Usuario`/`X-Rol` sin autenticar. `Program.cs` se niega a arrancar fuera de `Development`/`Testing` hasta que exista el módulo de identidad (por eso el compose fuerza `Development`).
+- **Identidad ≠ custodia:** login, logins fallidos, altas, cambios de rol y de contraseña van a `identidad."AuditoriaDeAccesos"` (append-only con triggers, sin encadenar), nunca a `AsientosDeCustodia`. `ContextoDeIdentidad` tiene su schema, sus migraciones (`Infrastructure/Identidad/Migraciones`) y no comparte transacción con la custodia.
+- **Autenticación:** `POST /auth/login` emite un JWT HS256 de 15 min (sin refresh). `[Authorize]` por defecto (`ValidacionDeSesion`): en cada petición el token se contrasta con la base, así que deshabilitar o cambiar un rol invalida los tokens al instante; con contraseña inicial o reseteada sólo se puede usar `POST /auth/contrasena`. `ActorDelToken` toma el actor del principal. Login rechazado = un único 401 genérico (siempre se verifica un hash, exista o no el usuario); lockout de 15 min tras 5 fallos, y rate limiting por IP en `/auth/login` y `/auth/contrasena` (`LimiteDeLogin`, 429), que es la defensa primaria porque el lockout no es seguro ante concurrencia. Limitaciones conocidas en `docs/architecture.md` (la auditoría de accesos no tiene hash-chain). Argon2id vía libsodium (Sodium.Core), nunca criptografía propia.
+- **Arranque:** `Program.cs` no arranca sin `Identidad:Jwt:ClaveDeFirma` (≥ 32 bytes) ni, si no hay ningún admin activo, sin `Identidad:AdminInicial:Usuario`/`Contrasena`. Todo desde user-secrets o variables de entorno; nada de credenciales por defecto.
+- **Rol Admin:** administra usuarios (`/usuarios`) y no accede a casos (separación de funciones). Nadie se administra a sí mismo, así que siempre queda un admin activo.
+- **Tests:** `AutenticacionPorCabeceras` (sólo en el proyecto de tests, registrado por `ServidorForense`) toma el actor de `X-Usuario`/`X-Rol`; sin esas cabeceras la petición va por JWT. `IpDePrueba` simula la IP remota con `X-Ip-De-Prueba` y el límite de login se sube en `ServidorForense` (los tests de límite lo bajan con `WithWebHostBuilder`). El servidor real no tiene autenticación por cabeceras. `IdentidadTests` cubre el camino JWT.
 - **Asentar en la cadena:** leer `ObtenerUltimoAsientoAsync` → `RegistroDeCustodia.Asentar(...)` → `Agregar` la entidad y el asiento → un solo `GuardarCambiosAsync`. El índice único `(CasoId, Secuencia)` serializa las escrituras concurrentes: el perdedor recibe `ConflictoDeCustodiaException` (409).
 - **Formato canónico del hash** (`AsientoDeCustodia.CalcularHash`, `forensic-video/custodia/v1`): campos con prefijo de longitud y timestamp UTC truncado a microsegundos (la precisión de PostgreSQL). Cambiarlo invalida todas las cadenas existentes: hay que versionarlo.
 - **Triggers append-only:** están en la migración `Inicial` (SQL a mano) y bloquean UPDATE/DELETE/TRUNCATE en `AsientosDeCustodia` y `Evidencias`.
@@ -65,7 +73,7 @@ Híbrida: el cómputo corre en la workstation del analista (GPU NVIDIA local); l
 - **Persistencia:** tres cosas separadas que no se mezclan — PostgreSQL vía EF Core (casos/metadatos), almacén de blobs de evidencia (originales inmutables + SHA-256), y el log de custodia append-only encadenado.
 - **Cola:** empezar con cola en PostgreSQL; RabbitMQ sólo si hace falta.
 - **Ingesta:** sólo se hashean los bytes crudos y se leen metadatos (ffprobe, sólo lectura); **nunca se transcodifica en la ingesta**. La normalización de contenedores/códecs y la extracción de frames (celulares; Milestone MKV/AVI/MP4; HikVision) son Operaciones de la Fase 2 que producen derivados, no pasos de ingesta.
-- **Identidad:** no hay Active Directory. Módulo de identidad propio en el servidor (roles analista/supervisor/auditor, Argon2 o bcrypt), con auditoría de accesos separada del log de custodia.
+- **Identidad:** no hay Active Directory. Módulo de identidad propio en el servidor (roles analista/supervisor/auditor/admin, Argon2id, JWT de vida corta), con auditoría de accesos separada del log de custodia: un evento de identidad nunca es un asiento de custodia.
 
 Clean Architecture + DDD: la capa de dominio no referencia OpenCV, PyTorch, EF Core ni ASP.NET. Si una regla de custodia importa algo de infraestructura, es un error de diseño.
 

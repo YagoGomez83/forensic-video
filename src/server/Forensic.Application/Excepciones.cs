@@ -28,3 +28,14 @@ public sealed class IntegridadComprometidaException(HashSha256 esperado, string 
 {
     public HashSha256 HashEsperado { get; } = esperado;
 }
+
+/// <summary>
+/// Login rechazado. El mensaje es siempre el mismo: no revela si falló el usuario, la contraseña o
+/// si la cuenta está bloqueada o deshabilitada.
+/// </summary>
+public sealed class CredencialesInvalidasException(Exception? interna = null)
+    : Exception("Usuario o contraseña incorrectos.", interna);
+
+/// <summary>Otro proceso modificó el mismo usuario primero. El cliente puede reintentar.</summary>
+public sealed class ConflictoDeIdentidadException(string mensaje, Exception? interna = null)
+    : Exception(mensaje, interna);

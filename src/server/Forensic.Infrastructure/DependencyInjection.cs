@@ -1,5 +1,7 @@
 using Forensic.Application;
+using Forensic.Application.Identidad;
 using Forensic.Infrastructure.Almacen;
+using Forensic.Infrastructure.Identidad;
 using Forensic.Infrastructure.Persistencia;
 using Forensic.Infrastructure.Workers;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +24,16 @@ public static class DependencyInjection
         services.AddDbContext<ContextoForense>(o => o.UseNpgsql(conexion));
         services.AddScoped<IPersistenciaForense, PersistenciaForense>();
 
+        // Identidad: otro schema y otras migraciones; nunca comparte transacción con la custodia.
+        services.AddDbContext<ContextoDeIdentidad>(o => o.UseNpgsql(
+            conexion, x => x.MigrationsHistoryTable("__EFMigrationsHistory", ContextoDeIdentidad.Schema)));
+        services.AddScoped<RepositorioDeUsuarios>();
+        services.AddScoped<IRepositorioDeUsuarios>(sp => sp.GetRequiredService<RepositorioDeUsuarios>());
+        services.AddScoped<IAuditoriaDeAccesos>(sp => sp.GetRequiredService<RepositorioDeUsuarios>());
+        services.AddSingleton<IHasheadorDeContrasena, HasheadorArgon2id>();
+        services.AddOptions<OpcionesJwt>().Bind(configuration.GetSection(OpcionesJwt.Seccion));
+        services.AddSingleton<IEmisorDeTokens, EmisorDeTokensJwt>();
+
         services.AddOptions<OpcionesAlmacen>().Bind(configuration.GetSection(OpcionesAlmacen.Seccion));
         services.AddSingleton<IAlmacenDeEvidencia, AlmacenDeEvidenciaEnDisco>();
 
@@ -34,5 +46,12 @@ public static class DependencyInjection
             http.Timeout = opciones.Timeout;
         });
         return services;
+    }
+
+    /// <summary>Aplica las migraciones de los dos contextos: custodia e identidad.</summary>
+    public static async Task MigrarAsync(IServiceProvider servicios)
+    {
+        await servicios.GetRequiredService<ContextoForense>().Database.MigrateAsync();
+        await servicios.GetRequiredService<ContextoDeIdentidad>().Database.MigrateAsync();
     }
 }
