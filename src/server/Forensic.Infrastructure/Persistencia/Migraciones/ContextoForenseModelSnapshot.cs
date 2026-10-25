@@ -162,9 +162,76 @@ namespace Forensic.Infrastructure.Persistencia.Migraciones
 
                     b.HasIndex("Hash");
 
+                    b.HasIndex("OperacionOrigenId");
+
                     b.HasIndex("PadreId");
 
                     b.ToTable("Evidencias", (string)null);
+                });
+
+            modelBuilder.Entity("Forensic.Domain.Operaciones.OperacionForense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("CasoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Entorno")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("EvidenciaEntradaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HashEntrada")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("HashPixelesSalida")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("HashSalida")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Parametros")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("RegistradaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("TamanoSalidaBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Via")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CasoId");
+
+                    b.HasIndex("EvidenciaEntradaId");
+
+                    b.ToTable("OperacionesForenses", (string)null);
                 });
 
             modelBuilder.Entity("Forensic.Domain.Custodia.AsientoDeCustodia", b =>
@@ -184,10 +251,30 @@ namespace Forensic.Infrastructure.Persistencia.Migraciones
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Forensic.Domain.Operaciones.OperacionForense", null)
+                        .WithMany()
+                        .HasForeignKey("OperacionOrigenId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Forensic.Domain.Evidencias.Evidencia", null)
                         .WithMany()
                         .HasForeignKey("PadreId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Forensic.Domain.Operaciones.OperacionForense", b =>
+                {
+                    b.HasOne("Forensic.Domain.Casos.Caso", null)
+                        .WithMany()
+                        .HasForeignKey("CasoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Forensic.Domain.Evidencias.Evidencia", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenciaEntradaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

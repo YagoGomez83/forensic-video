@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Evidencias;
@@ -11,6 +13,15 @@ namespace Forensic.Domain.Operaciones;
 /// </summary>
 public sealed class OperacionForense
 {
+    /// <summary>
+    /// Formato del detalle de su asiento. Cambiar su estructura exige una versión nueva: los asientos
+    /// existentes se siguen leyendo con la suya (<see cref="OperacionAsentada"/>).
+    /// </summary>
+    public const string FormatoDeDetalle = "forensic-video/operacion/v1";
+
+    /// <summary>Todo derivado de la Fase 2 es PNG lossless, codificado de forma determinista.</summary>
+    public const string FormatoDeSalida = "png";
+
     private OperacionForense()
     {
         Tipo = null!;
@@ -60,8 +71,9 @@ public sealed class OperacionForense
             throw new ExcepcionDeDominio("La evidencia de entrada no pertenece al caso.");
         caso.ExigirOperacion(actor);
         ArgumentNullException.ThrowIfNull(operacion);
-        if (string.IsNullOrWhiteSpace(entorno))
-            throw new ExcepcionDeDominio("Toda operación declara el entorno que la ejecutó: sin él no es reproducible.");
+        if (!EsObjetoJson(entorno))
+            throw new ExcepcionDeDominio(
+                "Toda operación declara el entorno que la ejecutó, como objeto JSON: sin él no es reproducible.");
         Evidencia.ValidarContenido(hashSalida, tamanoSalidaBytes);
 
         return new OperacionForense
@@ -81,5 +93,56 @@ public sealed class OperacionForense
             Actor = actor.Usuario,
             RegistradaEn = Tiempo.NormalizarParaCustodia(ahora),
         };
+    }
+
+    /// <summary>
+    /// Detalle del asiento <see cref="Custodia.TipoAsiento.OperacionAplicada"/>, en
+    /// <see cref="FormatoDeDetalle"/>. Parámetros y entorno van como JSON crudo, byte a byte como se
+    /// aplicaron, para que el asiento solo alcance para reproducir la operación.
+    /// </summary>
+    public string DetalleDeAsiento(Evidencia derivado)
+    {
+        if (derivado.OperacionOrigenId != Id)
+            throw new ExcepcionDeDominio("El derivado no salió de esta operación.");
+        using var buffer = new MemoryStream();
+        using (var w = new Utf8JsonWriter(buffer))
+        {
+            w.WriteStartObject();
+            w.WriteString("formato", FormatoDeDetalle);
+            w.WriteString("operacion", Tipo);
+            w.WritePropertyName("parametros");
+            w.WriteRawValue(Parametros);
+            w.WriteStartObject("entrada");
+            w.WriteString("evidenciaId", EvidenciaEntradaId);
+            w.WriteString("sha256", HashEntrada.Hex);
+            w.WriteEndObject();
+            w.WriteStartObject("salida");
+            w.WriteString("evidenciaId", derivado.Id);
+            w.WriteString("sha256", HashSalida.Hex);
+            w.WriteNumber("tamanoBytes", TamanoSalidaBytes);
+            w.WriteString("formato", FormatoDeSalida);
+            w.WriteString("sha256Pixeles", HashPixelesSalida);
+            w.WriteEndObject();
+            w.WritePropertyName("entorno");
+            w.WriteRawValue(Entorno);
+            w.WriteString("via", Via.ToString());
+            w.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    private static bool EsObjetoJson(string texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+            return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(texto);
+            return doc.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Forensic.Domain.Comun;
+using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
 using Forensic.Domain.Operaciones;
 using static Forensic.Domain.Tests.Fixtures;
@@ -118,5 +119,52 @@ public class OperacionesTests
         Assert.Equal((hash, tamano, via), (original.Hash, original.TamanoBytes, original.Via));
         Assert.True(original.EsOriginal);
         Assert.Equal(original.Id, derivado.PadreId);
+    }
+
+    [Fact]
+    public void El_asiento_de_la_operacion_tiene_formato_versionado_y_todo_lo_necesario_para_reproducirla()
+    {
+        var caso = CasoDeAna();
+        var original = Original(caso);
+        var op = OperacionForense.Registrar(
+            caso, original, Recorte.Crear(5, 10, 30, 20), EntornoDePrueba, HashDe("salida"), 512, "ab12", Ana, Ahora);
+        var derivado = original.Derivar(op, "recorte.png");
+
+        var asiento = RegistroDeCustodia.Asentar(
+            null, caso.Id, TipoAsiento.OperacionAplicada, derivado.Id, op.DetalleDeAsiento(derivado), Ana, Ahora);
+        var leida = OperacionAsentada.Desde(asiento);
+
+        Assert.Equal(OperacionForense.FormatoDeDetalle, leida.Formato);
+        Assert.Equal("forensic-video/operacion/v1", leida.Formato);
+        Assert.Equal(("opencv.recorte/v1", original.Id, original.Hash), (leida.Tipo, leida.EvidenciaEntradaId, leida.HashEntrada));
+        Assert.Equal((derivado.Id, derivado.Hash, 512L, "ab12"), (leida.EvidenciaSalidaId, leida.HashSalida, leida.TamanoSalidaBytes, leida.HashPixelesSalida));
+        // Parámetros y entorno, byte a byte como se aplicaron: es lo que se reenvía al reproducir.
+        Assert.Equal(op.Parametros, leida.Parametros);
+        Assert.Equal(EntornoDePrueba, leida.Entorno);
+        Assert.Equal(ViaProcesamiento.AdmisibleEnJuicio, leida.Via);
+        // Y desde el asiento solo se reconstruye la misma operación del catálogo.
+        var reconstruida = CatalogoDeOperaciones.Interpretar(leida.Tipo, JsonDocument.Parse(leida.Parametros).RootElement);
+        Assert.Equal(op.Parametros, reconstruida.ParametrosCanonicos);
+    }
+
+    [Fact]
+    public void Un_asiento_que_no_es_de_operacion_o_de_otro_formato_no_se_lee_como_operacion()
+    {
+        var caso = CasoDeAna();
+        var otro = RegistroDeCustodia.Asentar(null, caso.Id, TipoAsiento.CasoAbierto, null, "{}", Ana, Ahora);
+        var formatoFuturo = RegistroDeCustodia.Asentar(
+            null, caso.Id, TipoAsiento.OperacionAplicada, Guid.NewGuid(), """{"formato":"forensic-video/operacion/v9"}""", Ana, Ahora);
+
+        Assert.Throws<ExcepcionDeDominio>(() => OperacionAsentada.Desde(otro));
+        Assert.Throws<ExcepcionDeDominio>(() => OperacionAsentada.Desde(formatoFuturo));
+    }
+
+    [Fact]
+    public void El_entorno_debe_ser_un_objeto_json()
+    {
+        var caso = CasoDeAna();
+
+        Assert.Throws<ExcepcionDeDominio>(() => OperacionForense.Registrar(
+            caso, Original(caso), Recorte.Crear(0, 0, 1, 1), "opencv 4.14", HashDe("s"), 1, null, Ana, Ahora));
     }
 }
