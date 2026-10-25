@@ -1,0 +1,58 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Forensic.Api", "Forensic.Api\Forensic.Api.csproj", "{356E5327-CF05-4B37-965F-1673259B1296}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Forensic.Application", "Forensic.Application\Forensic.Application.csproj", "{14864F52-B290-4630-83C5-7CF8D534528E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Forensic.Domain", "Forensic.Domain\Forensic.Domain.csproj", "{1F1E7246-392F-41FD-9E3D-E62616F0ACCC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Forensic.Infrastructure", "Forensic.Infrastructure\Forensic.Infrastructure.csproj", "{E4E47149-12C4-45FA-B0FF-4F5DDE9B3546}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0B72A2EA-1E1F-40C3-83C3-5F49E5BAA307}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Forensic.Domain.Tests", "..\..\tests\Forensic.Domain.Tests\Forensic.Domain.Tests.csproj", "{9A0490B3-BA82-4F78-97A0-C2C4861C9DA7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Forensic.IntegrationTests", "..\..\tests\Forensic.IntegrationTests\Forensic.IntegrationTests.csproj", "{BB5ED5BE-0D60-4202-B2B1-B938B9AA59DE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{356E5327-CF05-4B37-965F-1673259B1296}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{356E5327-CF05-4B37-965F-1673259B1296}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{356E5327-CF05-4B37-965F-1673259B1296}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{356E5327-CF05-4B37-965F-1673259B1296}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14864F52-B290-4630-83C5-7CF8D534528E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14864F52-B290-4630-83C5-7CF8D534528E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14864F52-B290-4630-83C5-7CF8D534528E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14864F52-B290-4630-83C5-7CF8D534528E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F1E7246-392F-41FD-9E3D-E62616F0ACCC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F1E7246-392F-41FD-9E3D-E62616F0ACCC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F1E7246-392F-41FD-9E3D-E62616F0ACCC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F1E7246-392F-41FD-9E3D-E62616F0ACCC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4E47149-12C4-45FA-B0FF-4F5DDE9B3546}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4E47149-12C4-45FA-B0FF-4F5DDE9B3546}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4E47149-12C4-45FA-B0FF-4F5DDE9B3546}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4E47149-12C4-45FA-B0FF-4F5DDE9B3546}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A0490B3-BA82-4F78-97A0-C2C4861C9DA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A0490B3-BA82-4F78-97A0-C2C4861C9DA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A0490B3-BA82-4F78-97A0-C2C4861C9DA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A0490B3-BA82-4F78-97A0-C2C4861C9DA7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB5ED5BE-0D60-4202-B2B1-B938B9AA59DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB5ED5BE-0D60-4202-B2B1-B938B9AA59DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB5ED5BE-0D60-4202-B2B1-B938B9AA59DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB5ED5BE-0D60-4202-B2B1-B938B9AA59DE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{9A0490B3-BA82-4F78-97A0-C2C4861C9DA7} = {0B72A2EA-1E1F-40C3-83C3-5F49E5BAA307}
+		{BB5ED5BE-0D60-4202-B2B1-B938B9AA59DE} = {0B72A2EA-1E1F-40C3-83C3-5F49E5BAA307}
+	EndGlobalSection
+EndGlobal
