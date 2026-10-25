@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text;
 using Forensic.Application;
 using Forensic.Application.Identidad;
@@ -13,6 +12,10 @@ public sealed class OpcionesJwt
 {
     public const string Seccion = "Identidad:Jwt";
     public const int LargoMinimoDeClave = 32;
+
+    /// <summary>Claims del token: nombres cortos, sin el mapeo heredado de WS-Federation.</summary>
+    public const string ClaimUsuario = JwtRegisteredClaimNames.Sub;
+    public const string ClaimRol = "role";
 
     /// <summary>Clave HMAC de al menos 32 bytes. Sólo desde secretos: nunca en appsettings ni en la imagen.</summary>
     public string? ClaveDeFirma { get; set; }
@@ -42,8 +45,8 @@ public sealed class OpcionesJwt
         IssuerSigningKey = Clave(),
         ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
         ClockSkew = Tolerancia,
-        NameClaimType = JwtRegisteredClaimNames.Sub,
-        RoleClaimType = ClaimTypes.Role,
+        NameClaimType = ClaimUsuario,
+        RoleClaimType = ClaimRol,
     };
 }
 
@@ -66,9 +69,9 @@ internal sealed class EmisorDeTokensJwt(IOptions<OpcionesJwt> opciones, TimeProv
             Expires = expira.UtcDateTime,
             Claims = new Dictionary<string, object>
             {
-                [JwtRegisteredClaimNames.Sub] = actor.Usuario,
+                [OpcionesJwt.ClaimUsuario] = actor.Usuario,
                 [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N"),
-                [ClaimTypes.Role] = actor.Rol.ToString(),
+                [OpcionesJwt.ClaimRol] = actor.Rol.ToString(),
             },
             SigningCredentials = new SigningCredentials(o.Clave(), SecurityAlgorithms.HmacSha256),
         });
