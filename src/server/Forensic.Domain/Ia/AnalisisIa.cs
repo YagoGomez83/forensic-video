@@ -23,6 +23,11 @@ public sealed class AnalisisIa
     /// <summary>Lo que el servidor no puede verificar (entorno, ejecución) está declarado por la workstation.</summary>
     public const string OrigenDeLaProcedencia = "declarada-por-workstation";
 
+    /// <summary>El reporte viene de la workstation: entrada no confiable, con topes.</summary>
+    public const int MaximoHallazgos = 1000;
+
+    public const int LongitudMaximaEntorno = 16384;
+
     private readonly List<Hallazgo> _hallazgos = [];
 
     private AnalisisIa()
@@ -70,10 +75,15 @@ public sealed class AnalisisIa
         caso.ExigirOperacion(actor);
         ArgumentNullException.ThrowIfNull(definicion);
         ArgumentNullException.ThrowIfNull(hallazgos);
+        ArgumentNullException.ThrowIfNull(entorno);
         CatalogoDeIa.ExigirModeloPermitido(definicion.Tipo, modelo);
         if (hashEntradaDeclarado != entrada.Hash)
             throw new ExcepcionDeDominio(
                 $"El worker analizó otro contenido ({hashEntradaDeclarado}), no la evidencia {entrada.Id} ({entrada.Hash}).");
+        if (hallazgos.Count > MaximoHallazgos)
+            throw new ExcepcionDeDominio($"Un análisis admite hasta {MaximoHallazgos} hallazgos.");
+        if (entorno.Length > LongitudMaximaEntorno)
+            throw new ExcepcionDeDominio($"El entorno declarado admite hasta {LongitudMaximaEntorno} caracteres.");
         if (!Json.EsObjeto(entorno))
             throw new ExcepcionDeDominio("Todo análisis de IA declara el entorno que lo ejecutó, como objeto JSON.");
 

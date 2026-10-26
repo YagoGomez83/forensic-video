@@ -12,11 +12,17 @@ public sealed record HallazgoPropuesto
     public const int LongitudMaximaClase = 100;
     public const int LongitudMaximaTexto = 200;
 
+    /// <summary>El crudo viene de la workstation: entrada no confiable, con tope.</summary>
+    public const int LongitudMaximaCrudo = 4096;
+
     private HallazgoPropuesto(RegionDeImagen region, string? clase, string? textoLeido, decimal confianza, string datoCrudo)
     {
         ArgumentNullException.ThrowIfNull(region);
+        ArgumentNullException.ThrowIfNull(datoCrudo);
         if (confianza is < 0m or > 1m)
             throw new ExcepcionDeDominio("La confianza de un hallazgo va de 0 a 1.");
+        if (datoCrudo.Length > LongitudMaximaCrudo)
+            throw new ExcepcionDeDominio($"El dato crudo de un hallazgo admite hasta {LongitudMaximaCrudo} caracteres.");
         if (!Json.EsObjeto(datoCrudo))
             throw new ExcepcionDeDominio("Todo hallazgo conserva el dato crudo del modelo, como objeto JSON.");
         (Region, Clase, TextoLeido, Confianza, DatoCrudo) = (region, clase, textoLeido, confianza, datoCrudo);

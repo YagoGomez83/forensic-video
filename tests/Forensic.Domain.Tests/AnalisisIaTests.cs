@@ -170,6 +170,32 @@ public class AnalisisIaTests
             () => HallazgoPropuesto.Deteccion(RegionDeImagen.Crear(0, 0, 1, 1), "car", 0.5m, crudo));
     }
 
+    [Fact]
+    public void El_reporte_viene_de_la_workstation_y_tiene_tope_de_hallazgos()
+    {
+        var demasiados = Enumerable.Repeat(Auto(), AnalisisIa.MaximoHallazgos + 1).ToList();
+
+        Assert.Throws<ExcepcionDeDominio>(() => Registrar(Original(_caso), demasiados));
+        Assert.Equal(AnalisisIa.MaximoHallazgos, Registrar(Original(_caso), demasiados[1..]).Hallazgos.Count);
+    }
+
+    [Fact]
+    public void El_dato_crudo_tiene_tope_de_tamano()
+    {
+        var region = RegionDeImagen.Crear(0, 0, 1, 1);
+        var largo = $$"""{"x":"{{new string('a', HallazgoPropuesto.LongitudMaximaCrudo)}}"}""";
+
+        Assert.Throws<ExcepcionDeDominio>(() => HallazgoPropuesto.Deteccion(region, "car", 0.5m, largo));
+    }
+
+    [Fact]
+    public void El_entorno_declarado_tiene_tope_de_tamano()
+    {
+        var largo = $$"""{"x":"{{new string('a', AnalisisIa.LongitudMaximaEntorno)}}"}""";
+
+        Assert.Throws<ExcepcionDeDominio>(() => Registrar(Original(_caso), entorno: largo));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("con\nsalto")]
