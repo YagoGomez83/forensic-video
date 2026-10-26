@@ -11,6 +11,19 @@ hash de los pesos, runtime, proveedor y GPU), nunca como prueba.
 - ONNX Runtime usa CUDA si la ve y si no cae a CPU con los mismos pesos. El proveedor efectivo va en
   la procedencia.
 
+## API
+
+- `GET /v1/entorno`: modelos verificados (hash, licencia, proveedor efectivo) y entorno.
+- `POST /v1/detectar` (multipart: `parametros` = `{"umbralConfianzaMilesimas": 1..999}`, `entrada` =
+  la imagen en crudo): detección con YOLOX-s sobre las 80 clases de COCO. Devuelve el SHA-256 de los
+  bytes recibidos, el modelo, el entorno (con el proveedor y las constantes del postproceso) y los
+  hallazgos: región (envolvente entera de la caja, recortada a la imagen), clase, confianza y el dato
+  crudo del modelo (caja en flotante sin recortar, objetividad, puntaje de clase). Cero hallazgos
+  también es un resultado. Misma lectura de imagen que el worker de procesamiento: sin orientación
+  EXIF, una sola página.
+
+Son pistas, no conclusiones: «el modelo vio un auto con 0,82», nunca «hay un auto».
+
 ## Prueba de concepto con GPU
 
 Requiere una GPU NVIDIA, driver ≥ 580 (CUDA 13) y nvidia-container-toolkit.
