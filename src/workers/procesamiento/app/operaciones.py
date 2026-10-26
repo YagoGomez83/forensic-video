@@ -6,11 +6,15 @@ y contra las dimensiones reales de la imagen, que el servidor no conoce.
 
 import json
 import math
+import tempfile
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
+
+from app.png import decodificar
 
 LADO_MAXIMO = 65_535
 PIXELES_MAXIMOS = 100_000_000
@@ -239,7 +243,47 @@ CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
 }
 
 
+def extraccion_de_frame(entrada: bytes, p: Parametros) -> np.ndarray:
+    indice = p.entero("indice", 0, 10_000_000)
+    p.exigir_sin_sobrantes()
+    with tempfile.TemporaryDirectory(prefix="frame-") as directorio:
+        # Ruta propia y fija: el nombre de la evidencia nunca llega a una ruta ni a FFmpeg.
+        ruta = Path(directorio) / "entrada"
+        ruta.write_bytes(entrada)
+        captura = cv2.VideoCapture(str(ruta), cv2.CAP_FFMPEG, [cv2.CAP_PROP_N_THREADS, 1])
+        try:
+            if not captura.isOpened():
+                raise ParametrosInvalidos("El contenido no es un video que OpenCV pueda leer.")
+            # En orden desde el principio, sin seek: el seek no garantiza caer en el mismo frame.
+            for leidos in range(indice):
+                if not captura.grab():
+                    raise ParametrosInvalidos(
+                        f"El video tiene {leidos} frames; no existe el índice {indice}."
+                    )
+            ok, frame = captura.read()
+            if not ok:
+                raise ParametrosInvalidos(f"El video tiene {indice} frames; no existe el índice {indice}.")
+            return frame
+        finally:
+            captura.release()
+
+
+# Operaciones cuya entrada es un video (los bytes tal cual), no una imagen.
+CATALOGO_DE_VIDEO: dict[str, Callable[[bytes, Parametros], np.ndarray]] = {
+    "opencv.frame/v1": extraccion_de_frame,
+}
+
+
 def aplicar(operacion: str, parametros: str, pixeles: np.ndarray) -> np.ndarray:
     if operacion not in CATALOGO:
-        raise ParametrosInvalidos(f"La operación '{operacion}' no está en el catálogo.")
+        raise ParametrosInvalidos(f"La operación '{operacion}' no está en el catálogo de imagen.")
     return CATALOGO[operacion](pixeles, Parametros(operacion, parametros))
+
+
+def aplicar_a_bytes(operacion: str, parametros: str, entrada: bytes) -> np.ndarray:
+    """Las de video reciben los bytes; las de imagen, la imagen decodificada sin transformaciones."""
+    if operacion in CATALOGO_DE_VIDEO:
+        return CATALOGO_DE_VIDEO[operacion](entrada, Parametros(operacion, parametros))
+    if operacion not in CATALOGO:
+        raise ParametrosInvalidos(f"La operación '{operacion}' no está en el catálogo.")
+    return aplicar(operacion, parametros, decodificar(entrada))

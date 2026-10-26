@@ -70,6 +70,7 @@ public static class CatalogoDeOperaciones
         [BrilloContraste.TipoVersionado] = BrilloContraste.Desde,
         [Gamma.TipoVersionado] = Gamma.Desde,
         [Ecualizacion.TipoVersionado] = Ecualizacion.Desde,
+        [ExtraccionDeFrame.TipoVersionado] = ExtraccionDeFrame.Desde,
     };
 
     public static IReadOnlyCollection<string> Tipos => Operaciones.Keys;

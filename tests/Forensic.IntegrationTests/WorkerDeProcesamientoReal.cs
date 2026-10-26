@@ -41,6 +41,25 @@ public sealed class WorkerDeProcesamientoReal : IAsyncLifetime
         await _imagen.DisposeAsync();
     }
 
+    /// <summary>Un video FFV1 (lossless) con frames de ruido, generado con el OpenCV de la propia imagen.</summary>
+    public async Task<byte[]> GenerarVideoAsync(int frames)
+    {
+        const string ruta = "/tmp/muestra.mkv";
+        var r = await Contenedor.ExecAsync(
+        [
+            "python", "-c",
+            "import sys, numpy as np, cv2; " +
+            $"w = cv2.VideoWriter('{ruta}', cv2.VideoWriter_fourcc(*'FFV1'), 10, (64, 48)); " +
+            "g = np.random.default_rng(7); " +
+            "[w.write(g.integers(0, 256, (48, 64, 3), dtype=np.uint8)) for _ in range(int(sys.argv[1]))]; " +
+            "w.release()",
+            frames.ToString(),
+        ]);
+        if (r.ExitCode != 0)
+            throw new InvalidOperationException($"No se pudo generar el video: {r.Stderr}");
+        return await Contenedor.ReadFileAsync(ruta);
+    }
+
     /// <summary>Una imagen PNG real (ruido BGR con semilla fija), generada con el OpenCV de la propia imagen.</summary>
     public async Task<byte[]> GenerarPngAsync(int ancho, int alto, int semilla)
     {

@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool
 
 from app import entorno, operaciones
-from app.png import ImagenInvalida, codificar_png, decodificar, hash_de_pixeles
+from app.png import ImagenInvalida, codificar_png, hash_de_pixeles
 
 TAMANO_MAXIMO_BYTES = 512 * 1024 * 1024
 
@@ -26,14 +26,14 @@ def _entorno_compacto() -> str:
 
 @app.get("/salud")
 def salud() -> dict[str, Any]:
-    return {"estado": "ok", "entorno": entorno.descripcion(), "operaciones": sorted(operaciones.CATALOGO)}
+    catalogo = sorted([*operaciones.CATALOGO, *operaciones.CATALOGO_DE_VIDEO])
+    return {"estado": "ok", "entorno": entorno.descripcion(), "operaciones": catalogo}
 
 
 def _procesar(operacion: str, parametros: str, entrada: bytes) -> tuple[bytes, str, str]:
     # En el mismo hilo que procesa (OpenCL es por hilo), y el entorno se lee desde ahí: es el real.
     entorno.configurar()
-    pixeles = decodificar(entrada)
-    salida = operaciones.aplicar(operacion, parametros, pixeles)
+    salida = operaciones.aplicar_a_bytes(operacion, parametros, entrada)
     return codificar_png(salida), hash_de_pixeles(salida), _entorno_compacto()
 
 

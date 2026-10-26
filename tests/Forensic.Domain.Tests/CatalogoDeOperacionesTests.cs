@@ -25,6 +25,8 @@ public class CatalogoDeOperacionesTests
         { "opencv.tonal.brillo-contraste/v1", """{"contrasteCentesimas":120,"brillo":-15}""", """{"brillo":-15,"contrasteCentesimas":120}""" },
         { "opencv.tonal.gamma/v1", """{"gammaMilesimas":2200}""", """{"gammaMilesimas":2200}""" },
         { "opencv.tonal.ecualizacion/v1", """{}""", """{}""" },
+        { "opencv.frame/v1", """{"indice":0}""", """{"indice":0}""" },
+        { "opencv.frame/v1", """{"indice":12345}""", """{"indice":12345}""" },
     };
 
     public static TheoryData<string, string> Invalidas => new()
@@ -58,6 +60,9 @@ public class CatalogoDeOperacionesTests
         { "opencv.tonal.gamma/v1", """{"gammaMilesimas":99}""" },
         { "opencv.tonal.gamma/v1", """{"gammaMilesimas":10001}""" },
         { "opencv.tonal.ecualizacion/v1", """{"canal":"y"}""" },
+        // Frame: índice negativo o más allá del tope.
+        { "opencv.frame/v1", """{"indice":-1}""" },
+        { "opencv.frame/v1", """{"indice":10000001}""" },
     };
 
     [Theory]

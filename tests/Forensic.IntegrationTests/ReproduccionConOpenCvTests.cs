@@ -90,6 +90,23 @@ public sealed class ReproduccionConOpenCvTests : IClassFixture<ServidorForense>,
     }
 
     [Fact]
+    public async Task Extraer_un_frame_de_un_video_se_reproduce_byte_a_byte_con_opencv()
+    {
+        var caso = await _ana.AbrirCasoAsync();
+        var video = await _worker.GenerarVideoAsync(frames: 8);
+        var original = await (await _ana.IngestarAsync(caso.Id, video, "cam1.mkv")).LeerAsync<EvidenciaDto>();
+
+        var aplicada = await (await _ana.AplicarOperacionAsync(caso.Id, original.Id, "opencv.frame/v1", new { indice = 5 }))
+            .LeerAsync<OperacionAplicadaDto>();
+        var resultado = await (await _ana.ReproducirAsync(caso.Id, aplicada.Derivado.Id)).LeerAsync<ResultadoDeReproduccion>();
+
+        Assert.Equal("cam1-frame.png", aplicada.Derivado.NombreOriginal);
+        Assert.True(resultado.Reproducido, $"esperado {resultado.Sha256Esperado}, obtenido {resultado.Sha256Obtenido}");
+        // Un frame de un video sigue siendo admisible: la extracción es determinista.
+        Assert.Equal(Forensic.Domain.Evidencias.ViaProcesamiento.AdmisibleEnJuicio, aplicada.Derivado.Via);
+    }
+
+    [Fact]
     public async Task Una_region_fuera_de_la_imagen_la_rechaza_el_worker_real_con_422()
     {
         var (casoId, original) = await CasoConImagenAsync();
