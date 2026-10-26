@@ -99,6 +99,16 @@ public sealed class ClienteForense
     public Task<IReadOnlyList<CasoDto>> ListarCasosAsync(CancellationToken ct) =>
         EnviarAsync<IReadOnlyList<CasoDto>>(HttpMethod.Get, "casos", null, ct);
 
+    public Task<CasoDto> AbrirCasoAsync(string numeroExpediente, string descripcion, CancellationToken ct) =>
+        EnviarAsync<CasoDto>(HttpMethod.Post, "casos", new { numeroExpediente, descripcion }, ct);
+
+    public Task<IReadOnlyList<EvidenciaDto>> ListarEvidenciasAsync(Guid casoId, CancellationToken ct) =>
+        EnviarAsync<IReadOnlyList<EvidenciaDto>>(HttpMethod.Get, $"casos/{casoId}/evidencias", null, ct);
+
+    /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
+    public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
+        EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);
+
     private async Task<T> EnviarAsync<T>(HttpMethod metodo, string ruta, object? cuerpo, CancellationToken ct)
     {
         using var peticion = new HttpRequestMessage(metodo, ruta);

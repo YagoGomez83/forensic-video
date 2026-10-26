@@ -23,3 +23,24 @@ public enum EstadoCaso
 public sealed record CasoDto(
     Guid Id, string NumeroExpediente, string Descripcion, EstadoCaso Estado,
     DateTimeOffset AbiertoEn, string AbiertoPor, IReadOnlyList<string> AnalistasAsignados);
+
+public enum ViaProcesamiento
+{
+    AdmisibleEnJuicio = 1,
+    SoloInvestigacion = 2,
+}
+
+public sealed record EvidenciaDto(
+    Guid Id, Guid CasoId, string Hash, long TamanoBytes, string NombreOriginal, ViaProcesamiento Via,
+    Guid? PadreId, DateTimeOffset IngestadaEn, string IngestadaPor, bool ControlCruzadoPendiente);
+
+public sealed record AsientoDto(
+    long Secuencia, Guid Id, string Tipo, Guid? EvidenciaId, string Detalle, string Actor,
+    DateTimeOffset Timestamp, string HashAnterior, string Hash);
+
+/// <summary>El veredicto del servidor sobre la cadena. El cliente lo muestra; no lo recalcula.</summary>
+public sealed record VerificacionDto(bool EsIntegra, int CantidadAsientos, string? HashFinal, long? SecuenciaRota, string? Motivo);
+
+public sealed record ExportDeCustodia(
+    string Formato, DateTimeOffset GeneradoEn, string GeneradoPor, CasoDto Caso,
+    IReadOnlyList<AsientoDto> Asientos, VerificacionDto Verificacion, int CrucesPendientes);

@@ -1,7 +1,33 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Forensic.Cliente.Nucleo.Casos"
+             xmlns:api="using:Forensic.Cliente.Api"
              x:Class="Forensic.Cliente.Vistas.CasosVista"
              x:DataType="vm:CasosViewModel">
-  <TextBlock Text="Casos" Margin="16" FontSize="20" />
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Top" Spacing="8">
+      <TextBlock Text="Casos" FontSize="22" FontWeight="SemiBold" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBox x:Name="NuevoNumero" Width="200" Watermark="Número de expediente" Text="{Binding NuevoNumero}" />
+        <TextBox Width="360" Watermark="Descripción" Text="{Binding NuevaDescripcion}" />
+        <Button Content="Abrir caso nuevo" Command="{Binding AbrirNuevoCommand}" />
+        <Button Content="Actualizar" Command="{Binding CargarCommand}" />
+      </StackPanel>
+      <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+    <ListBox x:Name="Lista" Margin="0,12,0,0" ItemsSource="{Binding Casos}">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="api:CasoDto">
+          <Grid ColumnDefinitions="200,*,100,Auto">
+            <TextBlock Text="{Binding NumeroExpediente}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding Descripcion}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="{Binding Estado}" VerticalAlignment="Center" />
+            <Button Grid.Column="3" Content="Abrir"
+                    Command="{Binding $parent[ListBox].((vm:CasosViewModel)DataContext).AbrirCommand}"
+                    CommandParameter="{Binding}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
 </UserControl>
