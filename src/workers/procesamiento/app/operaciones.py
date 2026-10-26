@@ -104,9 +104,34 @@ def perspectiva(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
     )
 
 
+_GIROS = {1: cv2.ROTATE_90_CLOCKWISE, 2: cv2.ROTATE_180, 3: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+def rotacion90(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    giros = p.entero("giros", 1, 3)
+    p.exigir_sin_sobrantes()
+    return cv2.rotate(pixeles, _GIROS[giros])
+
+
+def rotacion(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    centesimas = p.entero("centesimasDeGrado", -36_000, 36_000)
+    if centesimas == 0:
+        raise ParametrosInvalidos("El ángulo de rotación no puede ser cero.")
+    interpolacion = _interpolacion(p)
+    p.exigir_sin_sobrantes()
+    alto, ancho = pixeles.shape[:2]
+    # Centro geométrico exacto en coordenadas de píxel; positivo = antihorario (convención de OpenCV).
+    matriz = cv2.getRotationMatrix2D(((ancho - 1) / 2, (alto - 1) / 2), centesimas / 100, 1.0)
+    return cv2.warpAffine(
+        pixeles, matriz, (ancho, alto), flags=interpolacion, borderMode=cv2.BORDER_CONSTANT, borderValue=0
+    )
+
+
 CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.recorte/v1": recorte,
     "opencv.perspectiva/v1": perspectiva,
+    "opencv.rotacion90/v1": rotacion90,
+    "opencv.rotacion/v1": rotacion,
 }
 
 

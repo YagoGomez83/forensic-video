@@ -67,6 +67,8 @@ public sealed class ReproduccionConOpenCvTests : IClassFixture<ServidorForense>,
 
     /// <summary>El gate, operación por operación, sobre una imagen BGR de 64x48.</summary>
     [Theory]
+    [InlineData("opencv.rotacion90/v1", """{"giros":1}""")]
+    [InlineData("opencv.rotacion/v1", """{"centesimasDeGrado":-1733,"interpolacion":"cubica"}""")]
     [InlineData("opencv.perspectiva/v1", """{"x1":3,"y1":2,"x2":60,"y2":4,"x3":62,"y3":45,"x4":1,"y4":44,"ancho":40,"alto":30,"interpolacion":"cubica"}""")]
     public async Task Cada_operacion_del_catalogo_se_reproduce_byte_a_byte_con_opencv(string tipo, string parametros)
     {

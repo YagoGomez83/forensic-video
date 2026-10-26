@@ -61,6 +61,8 @@ public static class CatalogoDeOperaciones
     {
         [Recorte.TipoVersionado] = Recorte.Desde,
         [Perspectiva.TipoVersionado] = Perspectiva.Desde,
+        [Rotacion90.TipoVersionado] = Rotacion90.Desde,
+        [Rotacion.TipoVersionado] = Rotacion.Desde,
     };
 
     public static IReadOnlyCollection<string> Tipos => Operaciones.Keys;

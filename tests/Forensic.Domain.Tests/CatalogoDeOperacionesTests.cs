@@ -16,6 +16,8 @@ public class CatalogoDeOperacionesTests
             """{"x1":0,"y1":0,"x2":99,"y2":3,"x3":97,"y3":60,"x4":2,"y4":58,"ancho":100,"alto":60,"interpolacion":"lineal"}""",
             """{"alto":60,"ancho":100,"interpolacion":"lineal","x1":0,"x2":99,"x3":97,"x4":2,"y1":0,"y2":3,"y3":60,"y4":58}"""
         },
+        { "opencv.rotacion90/v1", """{"giros":3}""", """{"giros":3}""" },
+        { "opencv.rotacion/v1", """{"interpolacion":"cubica","centesimasDeGrado":-1250}""", """{"centesimasDeGrado":-1250,"interpolacion":"cubica"}""" },
     };
 
     public static TheoryData<string, string> Invalidas => new()
@@ -25,6 +27,12 @@ public class CatalogoDeOperacionesTests
         { "opencv.perspectiva/v1", """{"x1":0,"y1":0,"x2":9,"y2":0,"x3":9,"y3":9,"x4":0,"y4":9,"ancho":0,"alto":10,"interpolacion":"lineal"}""" },
         { "opencv.perspectiva/v1", """{"x1":0,"y1":0,"x2":9,"y2":0,"x3":9,"y3":9,"x4":0,"y4":9,"ancho":20000,"alto":20000,"interpolacion":"lineal"}""" },
         { "opencv.perspectiva/v1", """{"x1":0,"y1":0,"x2":9,"y2":0,"x3":9,"y3":9,"x4":0,"ancho":10,"alto":10,"interpolacion":"lineal"}""" },
+        // Rotación: giros fuera de 1..3, ángulo nulo o fuera de ±360°.
+        { "opencv.rotacion90/v1", """{"giros":0}""" },
+        { "opencv.rotacion90/v1", """{"giros":4}""" },
+        { "opencv.rotacion/v1", """{"centesimasDeGrado":0,"interpolacion":"lineal"}""" },
+        { "opencv.rotacion/v1", """{"centesimasDeGrado":36001,"interpolacion":"lineal"}""" },
+        { "opencv.rotacion/v1", """{"centesimasDeGrado":90}""" },
     };
 
     [Theory]

@@ -82,3 +82,56 @@ def test_perspectiva_es_determinista_en_bytes():
 def test_perspectiva_rechaza_puntos_fuera_de_la_imagen_o_degenerados(puntos):
     with pytest.raises(ParametrosInvalidos):
         aplicar("opencv.perspectiva/v1", BGR, **puntos, ancho=10, alto=10, interpolacion="lineal")
+
+
+# --- rotación ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("giros", "codigo"),
+    [(1, cv2.ROTATE_90_CLOCKWISE), (2, cv2.ROTATE_180), (3, cv2.ROTATE_90_COUNTERCLOCKWISE)],
+)
+def test_rotacion90_es_exacta_en_sentido_horario(giros: int, codigo: int):
+    salida = aplicar("opencv.rotacion90/v1", BGR, giros=giros)
+
+    assert np.array_equal(salida, cv2.rotate(BGR, codigo))
+    assert np.array_equal(salida, np.rot90(BGR, k=-giros))
+
+
+def test_cuatro_cuartos_de_vuelta_devuelven_la_imagen_original():
+    salida = BGR
+    for _ in range(4):
+        salida = aplicar("opencv.rotacion90/v1", salida, giros=1)
+
+    assert np.array_equal(salida, BGR)
+
+
+def test_rotacion_por_angulo_gira_alrededor_del_centro_y_conserva_el_tamano():
+    salida = aplicar("opencv.rotacion/v1", BGR, centesimasDeGrado=1250, interpolacion="lineal")
+
+    matriz = cv2.getRotationMatrix2D((49.5, 29.5), 12.5, 1.0)
+    esperado = cv2.warpAffine(
+        BGR, matriz, (100, 60), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0
+    )
+    assert salida.shape == BGR.shape
+    assert np.array_equal(salida, esperado)
+
+
+def test_rotacion_por_angulo_es_determinista_en_bytes():
+    a = aplicar("opencv.rotacion/v1", GRIS_16, centesimasDeGrado=-733, interpolacion="cubica")
+    b = aplicar("opencv.rotacion/v1", GRIS_16.copy(), centesimasDeGrado=-733, interpolacion="cubica")
+
+    assert codificar_png(a) == codificar_png(b)
+
+
+@pytest.mark.parametrize(
+    "parametros",
+    [
+        {"giros": 0},
+        {"giros": True},
+        {"giros": 1, "sentido": "horario"},
+    ],
+)
+def test_rotacion90_rechaza_parametros_invalidos(parametros):
+    with pytest.raises(ParametrosInvalidos):
+        aplicar("opencv.rotacion90/v1", BGR, **parametros)
