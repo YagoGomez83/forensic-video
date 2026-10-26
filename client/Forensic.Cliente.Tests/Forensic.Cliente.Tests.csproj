@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Recursos\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Forensic.Cliente\Forensic.Cliente.csproj" />
   </ItemGroup>
 

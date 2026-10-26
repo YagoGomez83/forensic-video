@@ -122,6 +122,17 @@ public sealed class ClienteForense
         return (await respuesta.Content.ReadFromJsonAsync<EvidenciaDto>(Json, ct))!;
     }
 
+    /// <summary>
+    /// El contenido de una evidencia, verificado por el servidor antes de entregarlo (y asentado como
+    /// acceso en la cadena). Queda en memoria: nunca se escribe en un temporal.
+    /// </summary>
+    public async Task<byte[]> DescargarContenidoAsync(Guid casoId, Guid evidenciaId, CancellationToken ct)
+    {
+        using var peticion = new HttpRequestMessage(HttpMethod.Get, $"casos/{casoId}/evidencias/{evidenciaId}/contenido");
+        using var respuesta = await EnviarAsync(peticion, ct);
+        return await respuesta.Content.ReadAsByteArrayAsync(ct);
+    }
+
     /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);
