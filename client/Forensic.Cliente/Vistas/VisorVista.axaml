@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Forensic.Cliente.Nucleo.Visor"
              xmlns:c="using:Forensic.Cliente.Controles"
+             xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
              x:Class="Forensic.Cliente.Vistas.VisorVista"
              x:DataType="vm:VisorViewModel">
   <DockPanel>
@@ -23,11 +24,25 @@
         <Button x:Name="AplicarRecorte" Content="Aplicar recorte" Command="{Binding AplicarRecorteCommand}" />
         <ProgressBar IsIndeterminate="True" Width="120" IsVisible="{Binding Aplicando}" />
       </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Operación:" VerticalAlignment="Center" />
+        <ComboBox x:Name="Operaciones" Width="260" ItemsSource="{Binding Formularios}" SelectedItem="{Binding FormularioElegido}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="op:FormularioDeOperacion">
+              <TextBlock Text="{Binding Titulo}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button x:Name="Aplicar" Content="Aplicar" Command="{Binding AplicarOperacionCommand}" />
+        <Button Content="Limpiar marcas" Command="{Binding LimpiarMarcasCommand}" />
+      </StackPanel>
+      <ContentControl Content="{Binding FormularioElegido}" />
       <TextBlock Classes="aviso" Text="{Binding SinPrevisualizacion}" IsVisible="{Binding SinPrevisualizacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
       <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </StackPanel>
     <Border Background="#202020">
-      <c:LienzoDeEvidencia x:Name="Lienzo" Transformacion="{Binding Transformacion}" Region="{Binding RegionMarcada}" />
+      <c:LienzoDeEvidencia x:Name="Lienzo" Transformacion="{Binding Transformacion}" Region="{Binding RegionMarcada}"
+                           Puntos="{Binding PuntosMarcados}" />
     </Border>
   </DockPanel>
 </UserControl>

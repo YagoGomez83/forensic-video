@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using System.Globalization;
+using Forensic.Cliente.Nucleo.Operaciones;
 using Forensic.Cliente.Nucleo.Visor;
 
 namespace Forensic.Cliente.Controles;
@@ -24,6 +26,10 @@ public class LienzoDeEvidencia : Control
     public static readonly StyledProperty<Region?> RegionProperty =
         AvaloniaProperty.Register<LienzoDeEvidencia, Region?>(nameof(Region));
 
+    /// <summary>Los puntos marcados, en píxeles de la imagen; se dibujan numerados en su centro.</summary>
+    public static readonly StyledProperty<IReadOnlyList<PuntoDeImagen>?> PuntosProperty =
+        AvaloniaProperty.Register<LienzoDeEvidencia, IReadOnlyList<PuntoDeImagen>?>(nameof(Puntos));
+
     public const double FactorDeZoom = 1.25;
 
     private static readonly IPen TrazoDeRegion = new Pen(Brushes.Yellow, 1.5, dashStyle: DashStyle.Dash);
@@ -33,7 +39,7 @@ public class LienzoDeEvidencia : Control
 
     static LienzoDeEvidencia()
     {
-        AffectsRender<LienzoDeEvidencia>(ImagenProperty, TransformacionProperty, RegionProperty);
+        AffectsRender<LienzoDeEvidencia>(ImagenProperty, TransformacionProperty, RegionProperty, PuntosProperty);
         ClipToBoundsProperty.OverrideDefaultValue<LienzoDeEvidencia>(true);
         FocusableProperty.OverrideDefaultValue<LienzoDeEvidencia>(true);
     }
@@ -56,6 +62,12 @@ public class LienzoDeEvidencia : Control
         set => SetValue(RegionProperty, value);
     }
 
+    public IReadOnlyList<PuntoDeImagen>? Puntos
+    {
+        get => GetValue(PuntosProperty);
+        set => SetValue(PuntosProperty, value);
+    }
+
     protected VisorViewModel? Visor => DataContext as VisorViewModel;
 
     public override void Render(DrawingContext contexto)
@@ -76,11 +88,22 @@ public class LienzoDeEvidencia : Control
     /// <summary>Para lo que se dibuja sobre la imagen (p. ej. la región que se está marcando).</summary>
     protected virtual void DibujarEncima(DrawingContext contexto, TransformacionDeVista t)
     {
-        if (Region is not { } r)
+        if (Region is { } r)
+        {
+            var a = t.ImagenAPantalla(new Punto(r.X, r.Y));
+            var b = t.ImagenAPantalla(new Punto(r.X + r.Ancho, r.Y + r.Alto));
+            contexto.DrawRectangle(null, TrazoDeRegion, new Rect(new Point(a.X, a.Y), new Point(b.X, b.Y)));
+        }
+        if (Puntos is not { Count: > 0 } puntos)
             return;
-        var a = t.ImagenAPantalla(new Punto(r.X, r.Y));
-        var b = t.ImagenAPantalla(new Punto(r.X + r.Ancho, r.Y + r.Alto));
-        contexto.DrawRectangle(null, TrazoDeRegion, new Rect(new Point(a.X, a.Y), new Point(b.X, b.Y)));
+        for (var i = 0; i < puntos.Count; i++)
+        {
+            var c = t.ImagenAPantalla(new Punto(puntos[i].X + 0.5, puntos[i].Y + 0.5));
+            contexto.DrawEllipse(Brushes.Yellow, null, new Point(c.X, c.Y), 4, 4);
+            var numero = new FormattedText((i + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, Typeface.Default, 13, Brushes.Yellow);
+            contexto.DrawText(numero, new Point(c.X + 6, c.Y - 18));
+        }
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -99,6 +122,11 @@ public class LienzoDeEvidencia : Control
         {
             _ultimoArrastre = punto.Position;
             e.Pointer.Capture(this);
+            e.Handled = true;
+        }
+        else if (punto.Properties.IsLeftButtonPressed && Visor?.Modo == ModoDeMarcado.Puntos)
+        {
+            Visor.AgregarPunto(new Punto(punto.Position.X, punto.Position.Y));
             e.Handled = true;
         }
         else if (punto.Properties.IsLeftButtonPressed)

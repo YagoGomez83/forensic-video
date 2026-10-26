@@ -93,4 +93,41 @@ public class VisorVistaTests
         Assert.Equal(esperada, vm.RegionMarcada);
         Assert.Equal(esperada, lienzo.Region);
     }
+
+    [AvaloniaFact]
+    public async Task Con_la_perspectiva_elegida_cada_clic_marca_el_pixel_de_la_imagen_bajo_el_cursor()
+    {
+        var (ventana, vm, lienzo) = await VisorConImagenAsync();
+        vm.FormularioElegido = vm.Formularios.OfType<Nucleo.Operaciones.FormularioDePerspectiva>().Single();
+        Dispatcher.UIThread.RunJobs();
+        var clics = new[] { new Point(80.2, 60.7), new Point(300.1, 61.4), new Point(310.9, 250.3), new Point(75.5, 240.8) };
+
+        foreach (var c in clics)
+        {
+            ventana.MouseDown(lienzo.TranslatePoint(c, ventana)!.Value, MouseButton.Left);
+            ventana.MouseUp(lienzo.TranslatePoint(c, ventana)!.Value, MouseButton.Left);
+        }
+        Dispatcher.UIThread.RunJobs();
+
+        var esperados = clics.Select(c => vm.Transformacion.PixelEnImagen(new Punto(c.X, c.Y), 64, 48))
+            .Select(p => new Nucleo.Operaciones.PuntoDeImagen(p.X, p.Y));
+        Assert.Equal(esperados, vm.PuntosMarcados);
+        Assert.Equal(vm.PuntosMarcados, lienzo.Puntos);
+        Assert.Null(vm.RegionMarcada);
+    }
+
+    [AvaloniaFact]
+    public async Task El_editor_numerico_del_formulario_llega_al_view_model()
+    {
+        var (ventana, vm, _) = await VisorConImagenAsync();
+        var formulario = vm.Formularios.OfType<Nucleo.Operaciones.FormularioDePerspectiva>().Single();
+        vm.FormularioElegido = formulario;
+        Dispatcher.UIThread.RunJobs();
+
+        var editores = ventana.GetVisualDescendants().OfType<NumericUpDown>().ToList();
+        editores[0].Value = 40;
+        editores[1].Value = 30;
+
+        Assert.Equal((40m, 30m), (formulario.Ancho, formulario.Alto));
+    }
 }

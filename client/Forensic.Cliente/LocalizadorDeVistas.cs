@@ -5,7 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Forensic.Cliente;
 
 /// <summary>
-/// Busca la vista de cada ViewModel por convención: <c>Nucleo.X.FooViewModel</c> → <c>Vistas.FooVista</c>.
+/// Busca la vista de cada ViewModel por convención: <c>FooViewModel</c> → <c>Vistas.FooVista</c> y un
+/// formulario <c>FormularioDeX</c> → <c>Vistas.FormularioDeXVista</c>.
 /// Las vistas no tienen lógica: sólo bindings al ViewModel.
 /// </summary>
 public sealed class LocalizadorDeVistas : IDataTemplate
@@ -14,9 +15,10 @@ public sealed class LocalizadorDeVistas : IDataTemplate
     {
         if (param is null)
             return null;
-        var nombre = "Forensic.Cliente.Vistas." + param.GetType().Name.Replace("ViewModel", "Vista", StringComparison.Ordinal);
-        return Type.GetType(nombre) is { } tipo
-            ? (Control)Activator.CreateInstance(tipo)!
+        var tipo = param.GetType().Name;
+        var nombre = "Forensic.Cliente.Vistas." + (tipo.EndsWith("ViewModel", StringComparison.Ordinal) ? tipo[..^"ViewModel".Length] : tipo) + "Vista";
+        return Type.GetType(nombre) is { } vista
+            ? (Control)Activator.CreateInstance(vista)!
             : new TextBlock { Text = $"Falta la vista {nombre}." };
     }
 

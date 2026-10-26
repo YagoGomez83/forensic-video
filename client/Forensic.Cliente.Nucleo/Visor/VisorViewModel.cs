@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Forensic.Cliente.Api;
+using Forensic.Cliente.Nucleo.Operaciones;
 
 namespace Forensic.Cliente.Nucleo.Visor;
 
@@ -23,6 +24,26 @@ public sealed partial class VisorViewModel(
 
     [ObservableProperty]
     private bool _aplicando;
+
+    /// <summary>Los puntos marcados (p. ej. para la perspectiva), en píxeles de la imagen original.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<PuntoDeImagen> _puntosMarcados = [];
+
+    /// <summary>Las operaciones del catálogo, cada una con su formulario de parámetros.</summary>
+    public IReadOnlyList<FormularioDeOperacion> Formularios { get; } =
+    [
+        new FormularioDeRecorte(),
+        new FormularioDePerspectiva(),
+    ];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Modo))]
+    private FormularioDeOperacion? _formularioElegido;
+
+    /// <summary>Qué marca el botón izquierdo sobre la imagen: una región o puntos.</summary>
+    public ModoDeMarcado Modo => FormularioElegido?.Marcado is ModoDeMarcado.Puntos ? ModoDeMarcado.Puntos : ModoDeMarcado.Region;
+
+    public const int PuntosMaximos = 4;
 
     /// <summary>Más que esto no se trae a memoria sólo para previsualizar.</summary>
     public const long TamanoMaximoDePrevisualizacion = 256L * 1024 * 1024;
@@ -94,6 +115,40 @@ public sealed partial class VisorViewModel(
     /// <summary>Un arrastre en pantalla: la región se guarda ya traducida a píxeles de la imagen.</summary>
     public void MarcarRegion(Punto desde, Punto hasta) =>
         RegionMarcada = AnchoImagen > 0 ? Transformacion.RegionEnImagen(desde, hasta, AnchoImagen, AltoImagen) : null;
+
+    /// <summary>Un clic en pantalla agrega el píxel de la imagen que lo contiene; el quinto reinicia.</summary>
+    public void AgregarPunto(Punto pantalla)
+    {
+        if (AnchoImagen <= 0)
+            return;
+        var (x, y) = Transformacion.PixelEnImagen(pantalla, AnchoImagen, AltoImagen);
+        PuntosMarcados = PuntosMarcados.Count >= PuntosMaximos ? [new(x, y)] : [.. PuntosMarcados, new(x, y)];
+    }
+
+    [RelayCommand]
+    private void LimpiarMarcas() => (RegionMarcada, PuntosMarcados) = (null, []);
+
+    [RelayCommand]
+    private async Task AplicarOperacionAsync(CancellationToken ct)
+    {
+        Error = null;
+        if (FormularioElegido is not { } formulario)
+        {
+            Error = "Elegí una operación.";
+            return;
+        }
+        object parametros;
+        try
+        {
+            parametros = formulario.Parametros(new MarcasDelVisor(RegionMarcada, PuntosMarcados));
+        }
+        catch (ErrorDeFormulario ex)
+        {
+            Error = ex.Message;
+            return;
+        }
+        await AplicarAsync(formulario.Tipo, parametros, ct);
+    }
 
     private bool HayRegion() => RegionMarcada is not null;
 
