@@ -126,3 +126,41 @@ public sealed partial class FormularioDeDenoiseMediana : FormularioDeOperacion
 
     public override object Parametros(MarcasDelVisor marcas) => new { ventana = Entero(Ventana, "la ventana") };
 }
+
+/// <summary>Máscara de enfoque: sigma del desenfoque y cantidad, con hasta dos decimales.</summary>
+public sealed partial class FormularioDeUnsharp : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _sigma = 1.5m;
+
+    [ObservableProperty]
+    private decimal? _cantidad = 0.8m;
+
+    public override string Tipo => "opencv.realce.unsharp/v1";
+    public override string Titulo => "Realce (máscara de enfoque)";
+
+    public override object Parametros(MarcasDelVisor marcas) => new
+    {
+        sigmaCentesimas = PuntoFijo.AEntero(Sigma, 2, "la sigma"),
+        cantidadCentesimas = PuntoFijo.AEntero(Cantidad, 2, "la cantidad"),
+    };
+}
+
+/// <summary>CLAHE: límite de contraste con un decimal y celdas por lado de la cuadrícula.</summary>
+public sealed partial class FormularioDeClahe : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _limite = 2.0m;
+
+    [ObservableProperty]
+    private decimal? _cuadricula = 8;
+
+    public override string Tipo => "opencv.realce.clahe/v1";
+    public override string Titulo => "Realce (CLAHE)";
+
+    public override object Parametros(MarcasDelVisor marcas) => new
+    {
+        limiteDecimas = PuntoFijo.AEntero(Limite, 1, "el límite"),
+        cuadricula = Entero(Cuadricula, "la cuadrícula"),
+    };
+}

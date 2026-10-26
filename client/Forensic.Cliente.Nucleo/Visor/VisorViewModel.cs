@@ -38,6 +38,8 @@ public sealed partial class VisorViewModel(
         new FormularioDeRotacion(),
         new FormularioDeDenoiseNlMeans(),
         new FormularioDeDenoiseMediana(),
+        new FormularioDeUnsharp(),
+        new FormularioDeClahe(),
     ];
 
     [ObservableProperty]

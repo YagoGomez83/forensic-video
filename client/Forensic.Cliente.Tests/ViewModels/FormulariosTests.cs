@@ -152,4 +152,22 @@ public class FormulariosTests
         Assert.Equal("""{"ventana":5}""", Json(new FormularioDeDenoiseMediana { Ventana = 5 }.Parametros(SinMarcas)));
         Assert.Throws<ErrorDeFormulario>(() => new FormularioDeDenoiseMediana { Ventana = 5.5m }.Parametros(SinMarcas));
     }
+
+    [Fact]
+    public void El_unsharp_convierte_sigma_y_cantidad_a_centesimas_exactas()
+    {
+        var f = new FormularioDeUnsharp { Sigma = 2.37m, Cantidad = 1.33m };
+
+        Assert.Equal("""{"sigmaCentesimas":237,"cantidadCentesimas":133}""", Json(f.Parametros(SinMarcas)));
+        Assert.Throws<ErrorDeFormulario>(() => new FormularioDeUnsharp { Sigma = 1.005m, Cantidad = 1 }.Parametros(SinMarcas));
+    }
+
+    [Fact]
+    public void El_clahe_convierte_el_limite_a_decimas_exactas()
+    {
+        var f = new FormularioDeClahe { Limite = 2.5m, Cuadricula = 8 };
+
+        Assert.Equal("""{"limiteDecimas":25,"cuadricula":8}""", Json(f.Parametros(SinMarcas)));
+        Assert.Throws<ErrorDeFormulario>(() => new FormularioDeClahe { Limite = 2.55m, Cuadricula = 8 }.Parametros(SinMarcas));
+    }
 }

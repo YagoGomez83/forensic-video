@@ -22,6 +22,8 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
         { nameof(FormularioDeRotacion), """{"centesimasDeGrado":-1250,"interpolacion":"lineal"}""" },
         { nameof(FormularioDeDenoiseNlMeans), """{"busqueda":21,"h":10,"hColor":12,"plantilla":7}""" },
         { nameof(FormularioDeDenoiseMediana), """{"ventana":5}""" },
+        { nameof(FormularioDeUnsharp), """{"cantidadCentesimas":133,"sigmaCentesimas":237}""" },
+        { nameof(FormularioDeClahe), """{"cuadricula":8,"limiteDecimas":25}""" },
     };
 
     private static (FormularioDeOperacion Formulario, MarcasDelVisor Marcas) Armar(string nombre) => nombre switch
@@ -32,6 +34,8 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
         nameof(FormularioDeRotacion) => (new FormularioDeRotacion { Grados = -12.5m }, new(null, [])),
         nameof(FormularioDeDenoiseNlMeans) => (new FormularioDeDenoiseNlMeans { HColor = 12 }, new(null, [])),
         nameof(FormularioDeDenoiseMediana) => (new FormularioDeDenoiseMediana(), new(null, [])),
+        nameof(FormularioDeUnsharp) => (new FormularioDeUnsharp { Sigma = 2.37m, Cantidad = 1.33m }, new(null, [])),
+        nameof(FormularioDeClahe) => (new FormularioDeClahe { Limite = 2.5m }, new(null, [])),
         _ => throw new ArgumentOutOfRangeException(nameof(nombre), nombre, null),
     };
 
