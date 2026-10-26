@@ -4,9 +4,11 @@ Corre en la workstation del analista y sólo lo llama el cliente local. Todo lo 
 «sólo investigación»: el servidor lo asienta con la procedencia que este worker declara (modelo,
 hash de los pesos, runtime, proveedor y GPU), nunca como prueba.
 
-- Pesos clavados en la imagen (`ADD --checksum`), listados en `app/modelos.json` y verificados por
-  SHA-256 al arrancar. Un peso ausente, ilegible o alterado = el worker no arranca. Nada se descarga
-  en caliente.
+- Pesos clavados en la imagen: se bajan al construirla con `scripts/descargar_modelos.py`, que los
+  verifica contra el SHA-256 de `app/modelos.json` (si no coincide, el build falla), y el worker los
+  vuelve a verificar al arrancar. Un peso ausente, ilegible o alterado = el worker no arranca. Nada se
+  descarga en caliente. El Dockerfile no usa sintaxis de BuildKit: construye igual con el builder
+  clásico (Testcontainers).
 - `restricciones.txt`: versiones exactas de todo lo que entra en la imagen, CUDA y cuDNN incluidos.
 - ONNX Runtime usa CUDA si la ve y si no cae a CPU con los mismos pesos. El proveedor efectivo va en
   la procedencia.

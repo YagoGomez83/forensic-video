@@ -5,6 +5,7 @@ worker no sirve con un modelo que no sea exactamente el del manifiesto, porque s
 procedencia que va al asiento.
 """
 
+import functools
 import hashlib
 import json
 from dataclasses import dataclass
@@ -55,8 +56,16 @@ def abrir_sesion(modelo: Modelo) -> ort.InferenceSession:
     """Usa CUDA si la hay; si no, CPU. El proveedor que quedó se lee de la sesión, no de la lista."""
     proveedores = ["CPUExecutionProvider"]
     if "CUDAExecutionProvider" in ort.get_available_providers():
+        _precargar_cuda()
         proveedores.insert(0, "CUDAExecutionProvider")
     return ort.InferenceSession(str(modelo.ruta), providers=proveedores)
+
+
+@functools.cache
+def _precargar_cuda() -> None:
+    """CUDA y cuDNN entran por pip (paquetes nvidia-*): sin precargarlas, onnxruntime no las encuentra y
+    cae a CPU en silencio aun con GPU. El driver (libcuda) lo pone nvidia-container-toolkit con --gpus."""
+    ort.preload_dlls()
 
 
 def proveedor_efectivo(sesion: ort.InferenceSession) -> str:

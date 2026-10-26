@@ -1,7 +1,9 @@
-"""Sólo para desarrollo y CI: baja los pesos del manifiesto a ./modelos y verifica su hash.
+"""Baja los pesos del manifiesto (app/modelos.json) y verifica su hash. Sólo AL CONSTRUIR la imagen
+(destino /modelos) y en desarrollo y CI (destino ./modelos); el worker nunca descarga nada.
 
-El worker nunca descarga nada: en la imagen los pesos entran al construir (ADD --checksum) y en
-desarrollo los deja este script. Un hash que no coincide borra el archivo y falla.
+Un hash que no coincide borra el archivo y falla: el build de la imagen se corta ahí.
+
+    python scripts/descargar_modelos.py [destino]
 """
 
 import hashlib
@@ -14,8 +16,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 
 def main() -> int:
-    destino = RAIZ / "modelos"
-    destino.mkdir(exist_ok=True)
+    destino = Path(sys.argv[1]) if len(sys.argv) > 1 else RAIZ / "modelos"
+    destino.mkdir(parents=True, exist_ok=True)
     manifiesto = json.loads((RAIZ / "app" / "modelos.json").read_text(encoding="utf-8"))
     for entrada in manifiesto["modelos"]:
         ruta = destino / entrada["archivo"]

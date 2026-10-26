@@ -61,3 +61,30 @@ def test_el_modelo_de_deteccion_corre_y_reporta_el_proveedor_efectivo(directorio
 
     assert salida[0].shape == (1, 8400, 85)
     assert modelos.proveedor_efectivo(sesion) in ("CUDAExecutionProvider", "CPUExecutionProvider")
+
+
+def test_con_cuda_disponible_se_precargan_sus_bibliotecas_antes_de_abrir_la_sesion(
+    monkeypatch, directorio_modelos
+):
+    # Las bibliotecas de CUDA y cuDNN entran por pip (nvidia-*): sin precargarlas, onnxruntime no las
+    # encuentra y cae a CPU en silencio aun con GPU.
+    llamadas = []
+    monkeypatch.setattr(
+        modelos.ort, "get_available_providers", lambda: ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    )
+    monkeypatch.setattr(modelos.ort, "preload_dlls", lambda **_: llamadas.append("precarga"))
+    original = modelos.ort.InferenceSession
+    monkeypatch.setattr(
+        modelos.ort,
+        "InferenceSession",
+        lambda ruta, providers: (
+            llamadas.append("sesion") or original(ruta, providers=["CPUExecutionProvider"])
+        ),
+    )
+    modelos._precargar_cuda.cache_clear()
+    verificados = modelos.verificar(modelos.MANIFIESTO, directorio_modelos)
+
+    modelos.abrir_sesion(verificados["yolox-s"])
+    modelos.abrir_sesion(verificados["yolox-s"])
+
+    assert llamadas == ["precarga", "sesion", "sesion"]
