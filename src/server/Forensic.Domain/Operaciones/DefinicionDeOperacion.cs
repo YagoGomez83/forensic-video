@@ -67,6 +67,9 @@ public static class CatalogoDeOperaciones
         [DenoiseMediana.TipoVersionado] = DenoiseMediana.Desde,
         [RealceUnsharp.TipoVersionado] = RealceUnsharp.Desde,
         [RealceClahe.TipoVersionado] = RealceClahe.Desde,
+        [BrilloContraste.TipoVersionado] = BrilloContraste.Desde,
+        [Gamma.TipoVersionado] = Gamma.Desde,
+        [Ecualizacion.TipoVersionado] = Ecualizacion.Desde,
     };
 
     public static IReadOnlyCollection<string> Tipos => Operaciones.Keys;

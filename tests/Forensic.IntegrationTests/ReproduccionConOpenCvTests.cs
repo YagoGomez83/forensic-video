@@ -67,6 +67,9 @@ public sealed class ReproduccionConOpenCvTests : IClassFixture<ServidorForense>,
 
     /// <summary>El gate, operación por operación, sobre una imagen BGR de 64x48.</summary>
     [Theory]
+    [InlineData("opencv.tonal.brillo-contraste/v1", """{"contrasteCentesimas":137,"brillo":-21}""")]
+    [InlineData("opencv.tonal.gamma/v1", """{"gammaMilesimas":2200}""")]
+    [InlineData("opencv.tonal.ecualizacion/v1", """{}""")]
     [InlineData("opencv.realce.unsharp/v1", """{"sigmaCentesimas":237,"cantidadCentesimas":133}""")]
     [InlineData("opencv.realce.clahe/v1", """{"limiteDecimas":20,"cuadricula":8}""")]
     [InlineData("opencv.denoise.nlmeans/v1", """{"h":10,"hColor":10,"plantilla":7,"busqueda":21}""")]

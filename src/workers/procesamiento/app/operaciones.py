@@ -5,6 +5,7 @@ y contra las dimensiones reales de la imagen, que el servidor no conoce.
 """
 
 import json
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -183,6 +184,46 @@ def realce_clahe(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
 
+def _maximo_del_tipo(pixeles: np.ndarray) -> int:
+    if pixeles.dtype == np.uint8:
+        return 255
+    if pixeles.dtype == np.uint16:
+        return 65_535
+    raise ParametrosInvalidos(f"Profundidad no admitida: {pixeles.dtype}.")
+
+
+def brillo_contraste(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    contraste = p.entero("contrasteCentesimas", 1, 1000) / 100
+    maximo = _maximo_del_tipo(pixeles)
+    brillo = p.entero("brillo", -maximo, maximo)
+    p.exigir_sin_sobrantes()
+    # addWeighted con peso 0 en la segunda: contraste·x + brillo, con redondeo y saturación de OpenCV.
+    return cv2.addWeighted(pixeles, contraste, pixeles, 0, brillo)
+
+
+def gamma(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    exponente = 1000 / p.entero("gammaMilesimas", 100, 10_000)
+    p.exigir_sin_sobrantes()
+    maximo = _maximo_del_tipo(pixeles)
+    # LUT con math.pow (libm) y redondeo explícito hacia arriba en .5: determinista en un mismo entorno.
+    tabla = np.array(
+        [math.floor(maximo * math.pow(i / maximo, exponente) + 0.5) for i in range(maximo + 1)],
+        dtype=pixeles.dtype,
+    )
+    return cv2.LUT(pixeles, tabla) if pixeles.dtype == np.uint8 else tabla[pixeles]
+
+
+def ecualizacion(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    p.exigir_sin_sobrantes()
+    if pixeles.dtype != np.uint8 or not _es_gris_o_bgr(pixeles):
+        raise ParametrosInvalidos("La ecualización admite gris o BGR de 8 bits.")
+    if pixeles.ndim == 2:
+        return cv2.equalizeHist(pixeles)
+    ycrcb = cv2.cvtColor(pixeles, cv2.COLOR_BGR2YCrCb)
+    ycrcb[:, :, 0] = cv2.equalizeHist(ycrcb[:, :, 0])
+    return cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+
+
 CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.recorte/v1": recorte,
     "opencv.perspectiva/v1": perspectiva,
@@ -192,6 +233,9 @@ CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.denoise.mediana/v1": denoise_mediana,
     "opencv.realce.unsharp/v1": realce_unsharp,
     "opencv.realce.clahe/v1": realce_clahe,
+    "opencv.tonal.brillo-contraste/v1": brillo_contraste,
+    "opencv.tonal.gamma/v1": gamma,
+    "opencv.tonal.ecualizacion/v1": ecualizacion,
 }
 
 

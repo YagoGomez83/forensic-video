@@ -234,3 +234,60 @@ def test_clahe_rechaza_color_de_16_bits_o_con_alfa():
             limiteDecimas=20,
             cuadricula=8,
         )
+
+
+# --- corrección tonal ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pixeles", [BGR, GRIS_16])
+def test_brillo_contraste_es_alfa_por_imagen_mas_beta_con_saturacion(pixeles):
+    salida = aplicar("opencv.tonal.brillo-contraste/v1", pixeles, contrasteCentesimas=120, brillo=-15)
+
+    assert salida.dtype == pixeles.dtype
+    assert np.array_equal(salida, cv2.addWeighted(pixeles, 1.2, pixeles, 0, -15))
+
+
+def test_brillo_fuera_del_rango_de_8_bits_es_invalido():
+    with pytest.raises(ParametrosInvalidos):
+        aplicar("opencv.tonal.brillo-contraste/v1", BGR, contrasteCentesimas=100, brillo=300)
+
+
+def test_gamma_uno_es_la_identidad_en_8_y_16_bits():
+    assert np.array_equal(aplicar("opencv.tonal.gamma/v1", BGR, gammaMilesimas=1000), BGR)
+    assert np.array_equal(aplicar("opencv.tonal.gamma/v1", GRIS_16, gammaMilesimas=1000), GRIS_16)
+
+
+def test_gamma_mayor_que_uno_aclara_y_respeta_los_extremos():
+    rampa = np.arange(256, dtype=np.uint8).reshape(16, 16)
+
+    salida = aplicar("opencv.tonal.gamma/v1", rampa, gammaMilesimas=2200)
+
+    assert (salida[0, 0], salida[-1, -1]) == (0, 255)
+    assert np.all(salida.astype(int) >= rampa.astype(int))
+    assert np.all(np.diff(salida.ravel().astype(int)) >= 0)  # monótona
+    assert salida.ravel()[128] == round(255 * (128 / 255) ** (1 / 2.2))
+
+
+def test_gamma_es_determinista_en_bytes():
+    a = aplicar("opencv.tonal.gamma/v1", GRIS_16, gammaMilesimas=2200)
+    b = aplicar("opencv.tonal.gamma/v1", GRIS_16.copy(), gammaMilesimas=2200)
+
+    assert codificar_png(a) == codificar_png(b)
+
+
+def test_ecualizacion_en_gris_es_equalize_hist():
+    assert np.array_equal(aplicar("opencv.tonal.ecualizacion/v1", GRIS_8), cv2.equalizeHist(GRIS_8))
+
+
+def test_ecualizacion_en_color_se_aplica_sobre_la_luminancia():
+    ycrcb = cv2.cvtColor(BGR, cv2.COLOR_BGR2YCrCb)
+    ycrcb[:, :, 0] = cv2.equalizeHist(ycrcb[:, :, 0])
+
+    assert np.array_equal(
+        aplicar("opencv.tonal.ecualizacion/v1", BGR), cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+    )
+
+
+def test_ecualizacion_rechaza_16_bits():
+    with pytest.raises(ParametrosInvalidos):
+        aplicar("opencv.tonal.ecualizacion/v1", GRIS_16)

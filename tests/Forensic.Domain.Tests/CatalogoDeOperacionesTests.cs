@@ -22,6 +22,9 @@ public class CatalogoDeOperacionesTests
         { "opencv.denoise.mediana/v1", """{"ventana":5}""", """{"ventana":5}""" },
         { "opencv.realce.unsharp/v1", """{"sigmaCentesimas":150,"cantidadCentesimas":80}""", """{"cantidadCentesimas":80,"sigmaCentesimas":150}""" },
         { "opencv.realce.clahe/v1", """{"limiteDecimas":20,"cuadricula":8}""", """{"cuadricula":8,"limiteDecimas":20}""" },
+        { "opencv.tonal.brillo-contraste/v1", """{"contrasteCentesimas":120,"brillo":-15}""", """{"brillo":-15,"contrasteCentesimas":120}""" },
+        { "opencv.tonal.gamma/v1", """{"gammaMilesimas":2200}""", """{"gammaMilesimas":2200}""" },
+        { "opencv.tonal.ecualizacion/v1", """{}""", """{}""" },
     };
 
     public static TheoryData<string, string> Invalidas => new()
@@ -49,6 +52,12 @@ public class CatalogoDeOperacionesTests
         { "opencv.realce.unsharp/v1", """{"sigmaCentesimas":150,"cantidadCentesimas":0}""" },
         { "opencv.realce.clahe/v1", """{"limiteDecimas":0,"cuadricula":8}""" },
         { "opencv.realce.clahe/v1", """{"limiteDecimas":20,"cuadricula":65}""" },
+        // Tonal: contraste nulo, brillo fuera de rango, gamma fuera de rango, ecualización con parámetros.
+        { "opencv.tonal.brillo-contraste/v1", """{"contrasteCentesimas":0,"brillo":0}""" },
+        { "opencv.tonal.brillo-contraste/v1", """{"contrasteCentesimas":100,"brillo":70000}""" },
+        { "opencv.tonal.gamma/v1", """{"gammaMilesimas":99}""" },
+        { "opencv.tonal.gamma/v1", """{"gammaMilesimas":10001}""" },
+        { "opencv.tonal.ecualizacion/v1", """{"canal":"y"}""" },
     };
 
     [Theory]
