@@ -128,3 +128,12 @@ def test_los_bytes_coinciden_con_los_dorados_del_entorno_fijado(nombre: str):
 
     assert hashlib.sha256(codificar_png(arrays[nombre])).hexdigest() == png_esperado
     assert hash_de_pixeles(arrays[nombre]) == pixeles_esperado
+
+
+def test_el_entorno_reporta_la_cpu_real_aunque_las_rutas_optimizadas_esten_apagadas():
+    # Con useOptimized=False OpenCV marca todo como ausente ("?"); el diagnóstico tiene que ser el real.
+    entorno.configurar()
+    capacidades = entorno.descripcion()["cpu"].split()
+
+    assert capacidades
+    assert not all(c.endswith("?") for c in capacidades)

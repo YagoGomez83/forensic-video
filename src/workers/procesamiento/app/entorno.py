@@ -17,6 +17,10 @@ HILOS = 1
 
 VERSION_WORKER = "0.1.0"
 
+# Capacidades de CPU según OpenCV (base compilada, despachables con *, ausentes con ?). Se leen al
+# importar, antes de configurar(): con useOptimized=False OpenCV las reporta todas como ausentes.
+CPU = cv2.getCPUFeaturesLine()
+
 
 def configurar() -> None:
     """Se llama en el hilo que procesa: el uso de OpenCL es por hilo en OpenCV."""
@@ -37,9 +41,8 @@ def descripcion() -> dict[str, Any]:
         "optimizado": cv2.useOptimized(),
         "opencl": cv2.ocl.useOpenCL(),
         "plataforma": f"{sys.platform}-{platform.machine()}",
-        # Capacidades de CPU según OpenCV: base compilada, despachables (*) y ausentes en esta CPU (?).
         # Con useOptimized=False no deberían influir; se asientan para diagnosticar otra máquina.
-        "cpu": cv2.getCPUFeaturesLine(),
+        "cpu": CPU,
     }
 
 
