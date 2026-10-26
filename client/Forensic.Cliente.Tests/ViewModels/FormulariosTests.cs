@@ -137,4 +137,19 @@ public class FormulariosTests
 
         Assert.Contains("2 decimales", ex.Message);
     }
+
+    [Fact]
+    public void El_nl_means_envia_sus_cuatro_enteros()
+    {
+        var f = new FormularioDeDenoiseNlMeans { H = 10, HColor = 12, Plantilla = 7, Busqueda = 21 };
+
+        Assert.Equal("""{"h":10,"hColor":12,"plantilla":7,"busqueda":21}""", Json(f.Parametros(SinMarcas)));
+    }
+
+    [Fact]
+    public void La_mediana_envia_su_ventana_y_no_acepta_decimales()
+    {
+        Assert.Equal("""{"ventana":5}""", Json(new FormularioDeDenoiseMediana { Ventana = 5 }.Parametros(SinMarcas)));
+        Assert.Throws<ErrorDeFormulario>(() => new FormularioDeDenoiseMediana { Ventana = 5.5m }.Parametros(SinMarcas));
+    }
 }

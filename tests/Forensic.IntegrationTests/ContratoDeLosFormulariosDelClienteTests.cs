@@ -20,6 +20,8 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
         { nameof(FormularioDePerspectiva), """{"alto":30,"ancho":40,"interpolacion":"cubica","x1":3,"x2":60,"x3":62,"x4":1,"y1":2,"y2":4,"y3":45,"y4":44}""" },
         { nameof(FormularioDeRotacion90), """{"giros":2}""" },
         { nameof(FormularioDeRotacion), """{"centesimasDeGrado":-1250,"interpolacion":"lineal"}""" },
+        { nameof(FormularioDeDenoiseNlMeans), """{"busqueda":21,"h":10,"hColor":12,"plantilla":7}""" },
+        { nameof(FormularioDeDenoiseMediana), """{"ventana":5}""" },
     };
 
     private static (FormularioDeOperacion Formulario, MarcasDelVisor Marcas) Armar(string nombre) => nombre switch
@@ -28,6 +30,8 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
         nameof(FormularioDePerspectiva) => (new FormularioDePerspectiva { Ancho = 40, Alto = 30, Interpolacion = "cubica" }, new(null, Esquinas)),
         nameof(FormularioDeRotacion90) => (new FormularioDeRotacion90 { Giros = 2 }, new(null, [])),
         nameof(FormularioDeRotacion) => (new FormularioDeRotacion { Grados = -12.5m }, new(null, [])),
+        nameof(FormularioDeDenoiseNlMeans) => (new FormularioDeDenoiseNlMeans { HColor = 12 }, new(null, [])),
+        nameof(FormularioDeDenoiseMediana) => (new FormularioDeDenoiseMediana(), new(null, [])),
         _ => throw new ArgumentOutOfRangeException(nameof(nombre), nombre, null),
     };
 

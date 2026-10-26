@@ -87,3 +87,42 @@ public sealed partial class FormularioDeRotacion : FormularioDeOperacion
     public override object Parametros(MarcasDelVisor marcas) =>
         new { centesimasDeGrado = PuntoFijo.AEntero(Grados, 2, "el ángulo"), interpolacion = Interpolacion };
 }
+
+/// <summary>Reducción de ruido por medias no locales. hColor sólo actúa sobre imágenes en color.</summary>
+public sealed partial class FormularioDeDenoiseNlMeans : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _h = 10;
+
+    [ObservableProperty]
+    private decimal? _hColor = 10;
+
+    [ObservableProperty]
+    private decimal? _plantilla = 7;
+
+    [ObservableProperty]
+    private decimal? _busqueda = 21;
+
+    public override string Tipo => "opencv.denoise.nlmeans/v1";
+    public override string Titulo => "Reducción de ruido (NL-means)";
+
+    public override object Parametros(MarcasDelVisor marcas) => new
+    {
+        h = Entero(H, "la fuerza h"),
+        hColor = Entero(HColor, "la fuerza de color"),
+        plantilla = Entero(Plantilla, "la ventana de plantilla"),
+        busqueda = Entero(Busqueda, "la ventana de búsqueda"),
+    };
+}
+
+/// <summary>Filtro de mediana con ventana impar.</summary>
+public sealed partial class FormularioDeDenoiseMediana : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _ventana = 5;
+
+    public override string Tipo => "opencv.denoise.mediana/v1";
+    public override string Titulo => "Reducción de ruido (mediana)";
+
+    public override object Parametros(MarcasDelVisor marcas) => new { ventana = Entero(Ventana, "la ventana") };
+}
