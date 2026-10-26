@@ -3,12 +3,17 @@
 Nada se descarga en caliente. Un peso ausente o alterado es un error de arranque, no un aviso: el
 worker no sirve con un modelo que no sea exactamente el del manifiesto, porque su hash es la
 procedencia que va al asiento.
+
+Un modelo puede ser compuesto (el OCR: detección, reconocimiento y diccionario): cada componente se
+verifica por su hash, y el modelo tiene además un hash propio, el de la lista canónica de sus
+componentes (ver hash_compuesto). Ese es el que va al asiento y el que conoce la lista blanca del
+servidor: cambiar cualquier componente lo cambia.
 """
 
 import functools
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import onnxruntime as ort
@@ -31,34 +36,59 @@ class Modelo:
     version: str
     sha256: str
     licencia: str
-    ruta: Path
+    # Un modelo simple tiene ruta; uno compuesto, sus componentes (archivo -> ruta) y ruta None.
+    ruta: Path | None
+    componentes: dict[str, Path] = field(default_factory=dict)
+    # Hash de cada componente, ya verificado al arrancar (archivo -> sha256).
+    hashes_componentes: dict[str, str] = field(default_factory=dict)
+
+
+def hash_compuesto(componentes: dict[str, str]) -> str:
+    """SHA-256 de «archivo sha256» por línea, ordenado por archivo."""
+    lineas = "".join(f"{archivo} {sha256}\n" for archivo, sha256 in sorted(componentes.items()))
+    return hashlib.sha256(lineas.encode("utf-8")).hexdigest()
 
 
 def verificar(manifiesto: Path, directorio: Path) -> dict[str, Modelo]:
     """Verifica cada peso del manifiesto contra su hash, leyendo los bytes del disco."""
     verificados: dict[str, Modelo] = {}
     for entrada in json.loads(manifiesto.read_text(encoding="utf-8"))["modelos"]:
-        ruta = directorio / entrada["archivo"]
-        if not ruta.is_file():
-            raise ModeloInvalido(f"El peso de '{entrada['id']}' no está en {directorio}.")
-        real = _sha256(ruta)
-        if real != entrada["sha256"]:
-            raise ModeloInvalido(
-                f"El hash del peso de '{entrada['id']}' no coincide con el manifiesto: {real}."
+        id_ = entrada["id"]
+        if "componentes" in entrada:
+            componentes = {
+                c["archivo"]: _verificar_archivo(id_, directorio, c["archivo"], c["sha256"])
+                for c in entrada["componentes"]
+            }
+            real = hash_compuesto({c["archivo"]: c["sha256"] for c in entrada["componentes"]})
+            if real != entrada["sha256"]:
+                raise ModeloInvalido(f"El hash compuesto de '{id_}' no coincide con el manifiesto: {real}.")
+            hashes = {c["archivo"]: c["sha256"] for c in entrada["componentes"]}
+            verificados[id_] = Modelo(
+                id_, entrada["version"], real, entrada["licencia"], None, componentes, hashes
             )
-        verificados[entrada["id"]] = Modelo(
-            entrada["id"], entrada["version"], real, entrada["licencia"], ruta
-        )
+        else:
+            ruta = _verificar_archivo(id_, directorio, entrada["archivo"], entrada["sha256"])
+            verificados[id_] = Modelo(id_, entrada["version"], entrada["sha256"], entrada["licencia"], ruta)
     return verificados
 
 
-def abrir_sesion(modelo: Modelo) -> ort.InferenceSession:
+def _verificar_archivo(id_: str, directorio: Path, archivo: str, sha256: str) -> Path:
+    ruta = directorio / archivo
+    if not ruta.is_file():
+        raise ModeloInvalido(f"El peso {archivo} de '{id_}' no está en {directorio}.")
+    if (real := _sha256(ruta)) != sha256:
+        raise ModeloInvalido(f"El hash del peso {archivo} de '{id_}' no coincide con el manifiesto: {real}.")
+    return ruta
+
+
+def abrir_sesion(modelo: Modelo, componente: str | None = None) -> ort.InferenceSession:
     """Usa CUDA si la hay; si no, CPU. El proveedor que quedó se lee de la sesión, no de la lista."""
+    ruta = modelo.componentes[componente] if componente else modelo.ruta
     proveedores = ["CPUExecutionProvider"]
     if "CUDAExecutionProvider" in ort.get_available_providers():
         _precargar_cuda()
         proveedores.insert(0, "CUDAExecutionProvider")
-    return ort.InferenceSession(str(modelo.ruta), providers=proveedores)
+    return ort.InferenceSession(str(ruta), providers=proveedores)
 
 
 @functools.cache

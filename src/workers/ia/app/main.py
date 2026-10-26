@@ -15,7 +15,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, File, Form, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool
 
-from app import deteccion, entorno, modelos, superresolucion
+from app import deteccion, entorno, modelos, ocr, superresolucion
 from app.imagen import ImagenInvalida, a_bgr8, decodificar
 
 TAMANO_MAXIMO_BYTES = 512 * 1024 * 1024
@@ -28,27 +28,75 @@ def crear_app(directorio_modelos: Path) -> FastAPI:
     async def ciclo_de_vida(_: FastAPI) -> AsyncIterator[None]:
         # Sin todos los pesos verificados, el worker no arranca.
         verificados = modelos.verificar(modelos.MANIFIESTO, directorio_modelos)
+        # Una sesión por modelo simple; el OCR (compuesto) tiene su lector con dos sesiones.
         estado["sesiones"] = {
-            id_: (modelo, modelos.abrir_sesion(modelo)) for id_, modelo in verificados.items()
+            id_: (modelo, modelos.abrir_sesion(modelo))
+            for id_, modelo in verificados.items()
+            if modelo.ruta is not None
         }
+        estado["ocr"] = ocr.Lector(verificados[ocr.MODELO])
         yield
         estado.clear()
 
     app = FastAPI(title="Worker de IA forense", version=entorno.VERSION_WORKER, lifespan=ciclo_de_vida)
 
+    def _modelos() -> dict[str, Any]:
+        proveedores = {id_: modelos.proveedor_efectivo(s) for id_, (_, s) in estado["sesiones"].items()}
+        lector: ocr.Lector = estado["ocr"]
+        todos = [*(m for m, _ in estado["sesiones"].values()), lector.modelo]
+        proveedores[lector.modelo.id] = lector.proveedor
+        return {
+            m.id: {
+                "version": m.version,
+                "sha256": m.sha256,
+                "licencia": m.licencia,
+                "proveedor": proveedores[m.id],
+            }
+            for m in todos
+        }
+
     @app.get("/v1/entorno")
     def ver_entorno() -> dict[str, Any]:
+        return {"entorno": entorno.descripcion(), "modelos": _modelos()}
+
+    def _leer_texto(umbral: int, contenido: bytes) -> dict[str, Any]:
+        lector: ocr.Lector = estado["ocr"]
+        bgr = a_bgr8(decodificar(contenido))
+        hallazgos = lector.leer(bgr, umbral)
+        modelo = lector.modelo
         return {
-            "entorno": entorno.descripcion(),
-            "modelos": {
-                id_: {
-                    "version": modelo.version,
-                    "sha256": modelo.sha256,
-                    "licencia": modelo.licencia,
-                    "proveedor": modelos.proveedor_efectivo(sesion),
-                }
-                for id_, (modelo, sesion) in estado["sesiones"].items()
+            "modelo": {"id": modelo.id, "version": modelo.version, "sha256": modelo.sha256},
+            "entrada": {"ancho": bgr.shape[1], "alto": bgr.shape[0]},
+            "entorno": {
+                **entorno.descripcion(),
+                "proveedor": lector.proveedor,
+                # El hash del modelo es compuesto: los componentes quedan en el asiento por su hash.
+                "componentes": modelo.hashes_componentes,
+                "postproceso": ocr.POSTPROCESO,
             },
+            "hallazgos": hallazgos,
+        }
+
+    @app.post("/v1/ocr")
+    async def leer_texto(
+        parametros: Annotated[str, Form()],
+        entrada: Annotated[bytes, File()],
+    ) -> dict[str, Any]:
+        """OCR: cada línea es una pista con región, el texto que leyó el modelo, su confianza y el crudo."""
+        if len(entrada) > TAMANO_MAXIMO_BYTES:
+            raise HTTPException(413, "La entrada supera el tamaño máximo.")
+        try:
+            # Los mismos parámetros que la detección: el umbral de confianza en milésimas.
+            umbral, canonicos = deteccion.interpretar_parametros(parametros)
+            resultado = await run_in_threadpool(_leer_texto, umbral, entrada)
+        except (ImagenInvalida, deteccion.ParametrosInvalidos) as ex:
+            raise HTTPException(422, str(ex)) from ex
+        resultado["entrada"] = {"sha256": hashlib.sha256(entrada).hexdigest(), **resultado["entrada"]}
+        return {
+            "analisis": ocr.ANALISIS,
+            "parametros": {"umbralConfianzaMilesimas": umbral},
+            "parametrosCanonicos": canonicos,
+            **resultado,
         }
 
     def _detectar(umbral: int, contenido: bytes) -> dict[str, Any]:

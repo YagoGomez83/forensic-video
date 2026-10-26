@@ -88,3 +88,64 @@ def test_con_cuda_disponible_se_precargan_sus_bibliotecas_antes_de_abrir_la_sesi
     modelos.abrir_sesion(verificados["yolox-s"])
 
     assert llamadas == ["precarga", "sesion", "sesion"]
+
+
+def _compuesto(tmp_path: Path, archivos: dict[str, bytes], sha256: str | None = None) -> Path:
+    for nombre, contenido in archivos.items():
+        (tmp_path / nombre).write_bytes(contenido)
+    componentes = [
+        {
+            "archivo": nombre,
+            "sha256": hashlib.sha256(contenido).hexdigest(),
+            "origen": f"https://example.invalid/{nombre}",
+        }
+        for nombre, contenido in archivos.items()
+    ]
+    manifiesto = tmp_path / "modelos.json"
+    entrada = {
+        "id": "compuesto",
+        "version": "1",
+        "sha256": sha256 or modelos.hash_compuesto({c["archivo"]: c["sha256"] for c in componentes}),
+        "licencia": "Apache-2.0",
+        "componentes": componentes,
+    }
+    manifiesto.write_text(json.dumps({"modelos": [entrada]}), encoding="utf-8")
+    return manifiesto
+
+
+def test_el_hash_compuesto_es_el_de_la_lista_canonica_de_componentes():
+    # SHA-256 de «archivo sha256» por línea, ordenado por archivo: cambiar cualquier componente lo cambia.
+    esperado = hashlib.sha256(b"a.onnx " + b"1" * 64 + b"\nb.txt " + b"2" * 64 + b"\n").hexdigest()
+
+    assert modelos.hash_compuesto({"b.txt": "2" * 64, "a.onnx": "1" * 64}) == esperado
+
+
+def test_un_modelo_compuesto_verifica_cada_componente_y_su_hash(tmp_path):
+    manifiesto = _compuesto(tmp_path, {"det.onnx": b"det", "dic.txt": b"dic"})
+
+    modelo = modelos.verificar(manifiesto, tmp_path)["compuesto"]
+
+    assert modelo.componentes == {"det.onnx": tmp_path / "det.onnx", "dic.txt": tmp_path / "dic.txt"}
+    assert modelo.ruta is None
+
+
+def test_un_componente_alterado_impide_arrancar(tmp_path):
+    manifiesto = _compuesto(tmp_path, {"det.onnx": b"det", "dic.txt": b"dic"})
+    (tmp_path / "dic.txt").write_bytes(b"otro diccionario")
+
+    with pytest.raises(modelos.ModeloInvalido, match="dic.txt"):
+        modelos.verificar(manifiesto, tmp_path)
+
+
+def test_un_hash_compuesto_que_no_corresponde_impide_arrancar(tmp_path):
+    manifiesto = _compuesto(tmp_path, {"det.onnx": b"det"}, sha256="0" * 64)
+
+    with pytest.raises(modelos.ModeloInvalido, match="compuesto"):
+        modelos.verificar(manifiesto, tmp_path)
+
+
+def test_el_ocr_es_un_modelo_compuesto_en_el_manifiesto_real(directorio_modelos):
+    ocr = modelos.verificar(modelos.MANIFIESTO, directorio_modelos)["ppocrv4-en"]
+
+    assert ocr.sha256 == "3d37f552dfc2354511c40cd5b68793129ce54222aa2279bf4a54dcdee9cf134f"
+    assert set(ocr.componentes) == {"ppocrv4_det.onnx", "ppocrv4_rec_en.onnx", "ppocrv4_en_dict.txt"}

@@ -20,15 +20,17 @@ def main() -> int:
     destino.mkdir(parents=True, exist_ok=True)
     manifiesto = json.loads((RAIZ / "app" / "modelos.json").read_text(encoding="utf-8"))
     for entrada in manifiesto["modelos"]:
-        ruta = destino / entrada["archivo"]
-        if not ruta.is_file():
-            print(f"Bajando {entrada['id']} desde {entrada['origen']}")
-            urllib.request.urlretrieve(entrada["origen"], ruta)  # noqa: S310 - URL fija del manifiesto
-        real = hashlib.sha256(ruta.read_bytes()).hexdigest()
-        if real != entrada["sha256"]:
-            ruta.unlink()
-            print(f"El hash de {entrada['id']} no coincide ({real}); se borró.", file=sys.stderr)
-            return 1
+        # Un modelo compuesto (el OCR) baja cada componente; el hash compuesto lo verifica el worker.
+        for archivo in entrada.get("componentes", [entrada]):
+            ruta = destino / archivo["archivo"]
+            if not ruta.is_file():
+                print(f"Bajando {archivo['archivo']} desde {archivo['origen']}")
+                urllib.request.urlretrieve(archivo["origen"], ruta)  # noqa: S310 - URL fija del manifiesto
+            real = hashlib.sha256(ruta.read_bytes()).hexdigest()
+            if real != archivo["sha256"]:
+                ruta.unlink()
+                print(f"El hash de {archivo['archivo']} no coincide ({real}); se borró.", file=sys.stderr)
+                return 1
         print(f"{entrada['id']}: ok")
     return 0
 

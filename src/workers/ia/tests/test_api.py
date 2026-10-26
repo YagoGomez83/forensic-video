@@ -178,3 +178,33 @@ def test_superresolucion_rechaza_parametros_y_contenido_invalidos(cliente):
 
     assert _superresolver(cliente, _png(np.zeros((4, 4, 3), np.uint8)), '{"escala":2}').status_code == 422
     assert _superresolver(cliente, b"no es una imagen").status_code == 422
+
+
+# --- POST /v1/ocr ---
+
+PPOCR_SHA256 = "3d37f552dfc2354511c40cd5b68793129ce54222aa2279bf4a54dcdee9cf134f"
+
+
+def test_ocr_devuelve_el_texto_leido_con_su_procedencia(cliente):
+    import cv2
+    import numpy as np
+
+    img = np.full((200, 480, 3), 255, np.uint8)
+    cv2.putText(img, "ABC123", (40, 110), cv2.FONT_HERSHEY_SIMPLEX, 1.6, (0, 0, 0), 4)
+
+    r = cliente.post(
+        "/v1/ocr",
+        data={"parametros": '{"umbralConfianzaMilesimas":500}'},
+        files={"entrada": ("entrada.bin", _png(img), "application/octet-stream")},
+    )
+
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["analisis"] == "ia.ocr/v1"
+    assert cuerpo["modelo"] == {"id": "ppocrv4-en", "version": "PP-OCRv4", "sha256": PPOCR_SHA256}
+    componentes = {"ppocrv4_det.onnx", "ppocrv4_rec_en.onnx", "ppocrv4_en_dict.txt"}
+    assert set(cuerpo["entorno"]["componentes"]) == componentes
+    assert cuerpo["entorno"]["postproceso"]["umbralCaja"] == "0.6"
+    (h,) = cuerpo["hallazgos"]
+    assert set(h) == {"region", "textoLeido", "confianza", "crudo"}
+    assert h["textoLeido"] == "ABC123"

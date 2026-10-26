@@ -30,6 +30,13 @@ hash de los pesos, runtime, proveedor y GPU), nunca como prueba.
   entrada y de la salida, entorno. El cliente reenvía PNG y reporte al servidor tal cual. Inventa
   detalle plausible, no recupera el real.
 
+- `POST /v1/ocr` (multipart: `parametros` = `{"umbralConfianzaMilesimas": 1..999}`, `entrada`): PP-OCRv4
+  (detección DB + reconocimiento CTC en inglés). Un hallazgo por línea: región, `textoLeido`, confianza
+  (la del reconocimiento) y el crudo (polígono, puntajes, probabilidad de cada carácter). Para leer
+  una patente: recortar el vehículo con la operación determinista de la Fase 2 y leer el derivado.
+  El modelo es compuesto (detección, reconocimiento y diccionario): su hash es el de la lista
+  canónica de componentes, y los hashes de cada uno van en el entorno.
+
 Son pistas, no conclusiones: «el modelo vio un auto con 0,82», nunca «hay un auto».
 
 ## Prueba de concepto con GPU
