@@ -20,6 +20,8 @@ public class CatalogoDeOperacionesTests
         { "opencv.rotacion/v1", """{"interpolacion":"cubica","centesimasDeGrado":-1250}""", """{"centesimasDeGrado":-1250,"interpolacion":"cubica"}""" },
         { "opencv.denoise.nlmeans/v1", """{"h":10,"hColor":10,"plantilla":7,"busqueda":21}""", """{"busqueda":21,"h":10,"hColor":10,"plantilla":7}""" },
         { "opencv.denoise.mediana/v1", """{"ventana":5}""", """{"ventana":5}""" },
+        { "opencv.realce.unsharp/v1", """{"sigmaCentesimas":150,"cantidadCentesimas":80}""", """{"cantidadCentesimas":80,"sigmaCentesimas":150}""" },
+        { "opencv.realce.clahe/v1", """{"limiteDecimas":20,"cuadricula":8}""", """{"cuadricula":8,"limiteDecimas":20}""" },
     };
 
     public static TheoryData<string, string> Invalidas => new()
@@ -42,6 +44,11 @@ public class CatalogoDeOperacionesTests
         { "opencv.denoise.nlmeans/v1", """{"h":101,"hColor":10,"plantilla":7,"busqueda":21}""" },
         { "opencv.denoise.mediana/v1", """{"ventana":4}""" },
         { "opencv.denoise.mediana/v1", """{"ventana":17}""" },
+        // Realce: sigma o cantidad fuera de rango, cuadrícula o límite nulos.
+        { "opencv.realce.unsharp/v1", """{"sigmaCentesimas":5,"cantidadCentesimas":80}""" },
+        { "opencv.realce.unsharp/v1", """{"sigmaCentesimas":150,"cantidadCentesimas":0}""" },
+        { "opencv.realce.clahe/v1", """{"limiteDecimas":0,"cuadricula":8}""" },
+        { "opencv.realce.clahe/v1", """{"limiteDecimas":20,"cuadricula":65}""" },
     };
 
     [Theory]

@@ -159,6 +159,30 @@ def denoise_mediana(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
     return cv2.medianBlur(pixeles, ventana)
 
 
+def realce_unsharp(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    sigma = p.entero("sigmaCentesimas", 10, 5000) / 100
+    cantidad = p.entero("cantidadCentesimas", 1, 1000) / 100
+    p.exigir_sin_sobrantes()
+    desenfocada = cv2.GaussianBlur(pixeles, (0, 0), sigma)
+    # addWeighted satura al rango del tipo: no hay desbordes ni conversión de profundidad.
+    return cv2.addWeighted(pixeles, 1 + cantidad, desenfocada, -cantidad, 0)
+
+
+def realce_clahe(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    limite = p.entero("limiteDecimas", 1, 400) / 10
+    cuadricula = p.entero("cuadricula", 1, 64)
+    p.exigir_sin_sobrantes()
+    clahe = cv2.createCLAHE(clipLimit=limite, tileGridSize=(cuadricula, cuadricula))
+    if pixeles.ndim == 2:
+        return clahe.apply(pixeles)
+    if pixeles.dtype != np.uint8 or pixeles.shape[2] != 3:
+        raise ParametrosInvalidos("CLAHE admite gris de 8 o 16 bits y BGR de 8 bits.")
+    # En 8 bits la conversión a Lab de OpenCV es de punto fijo: no introduce floats.
+    lab = cv2.cvtColor(pixeles, cv2.COLOR_BGR2LAB)
+    lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
 CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.recorte/v1": recorte,
     "opencv.perspectiva/v1": perspectiva,
@@ -166,6 +190,8 @@ CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.rotacion/v1": rotacion,
     "opencv.denoise.nlmeans/v1": denoise_nlmeans,
     "opencv.denoise.mediana/v1": denoise_mediana,
+    "opencv.realce.unsharp/v1": realce_unsharp,
+    "opencv.realce.clahe/v1": realce_clahe,
 }
 
 

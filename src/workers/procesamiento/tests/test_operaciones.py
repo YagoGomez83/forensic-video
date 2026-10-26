@@ -183,3 +183,54 @@ def test_mediana_de_16_bits_solo_admite_ventanas_de_3_o_5():
 def test_mediana_rechaza_ventanas_pares():
     with pytest.raises(ParametrosInvalidos):
         aplicar("opencv.denoise.mediana/v1", BGR, ventana=4)
+
+
+# --- realce --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pixeles", [BGR, GRIS_16])
+def test_unsharp_es_la_imagen_mas_su_detalle_con_saturacion(pixeles):
+    salida = aplicar("opencv.realce.unsharp/v1", pixeles, sigmaCentesimas=150, cantidadCentesimas=80)
+
+    desenfocada = cv2.GaussianBlur(pixeles, (0, 0), 1.5)
+    assert salida.dtype == pixeles.dtype
+    assert np.array_equal(salida, cv2.addWeighted(pixeles, 1.8, desenfocada, -0.8, 0))
+
+
+def test_unsharp_es_determinista_en_bytes():
+    a = aplicar("opencv.realce.unsharp/v1", BGR, sigmaCentesimas=237, cantidadCentesimas=133)
+    b = aplicar("opencv.realce.unsharp/v1", BGR.copy(), sigmaCentesimas=237, cantidadCentesimas=133)
+
+    assert codificar_png(a) == codificar_png(b)
+
+
+@pytest.mark.parametrize("pixeles", [GRIS_8, GRIS_16])
+def test_clahe_en_gris_es_create_clahe_apply(pixeles):
+    salida = aplicar("opencv.realce.clahe/v1", pixeles, limiteDecimas=20, cuadricula=8)
+
+    assert np.array_equal(salida, cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(pixeles))
+
+
+def test_clahe_en_color_se_aplica_sobre_la_luminancia_de_lab():
+    salida = aplicar("opencv.realce.clahe/v1", BGR, limiteDecimas=20, cuadricula=8)
+
+    lab = cv2.cvtColor(BGR, cv2.COLOR_BGR2LAB)
+    lab[:, :, 0] = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(lab[:, :, 0])
+    assert np.array_equal(salida, cv2.cvtColor(lab, cv2.COLOR_LAB2BGR))
+
+
+def test_clahe_rechaza_color_de_16_bits_o_con_alfa():
+    with pytest.raises(ParametrosInvalidos):
+        aplicar(
+            "opencv.realce.clahe/v1",
+            rng.integers(0, 65536, (20, 20, 3), dtype=np.uint16),
+            limiteDecimas=20,
+            cuadricula=8,
+        )
+    with pytest.raises(ParametrosInvalidos):
+        aplicar(
+            "opencv.realce.clahe/v1",
+            rng.integers(0, 256, (20, 20, 4), dtype=np.uint8),
+            limiteDecimas=20,
+            cuadricula=8,
+        )
