@@ -12,6 +12,8 @@ public enum TipoAsiento
     EvidenciaIngestada = 4,
     EvidenciaAccedida = 5,
     ControlCruzadoCompletado = 6,
+    OperacionAplicada = 7,
+    OperacionReproducida = 8,
 }
 
 /// <summary>

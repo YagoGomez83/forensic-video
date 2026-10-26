@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Estado del repositorio
 
-Fase 1: servidor de custodia .NET 8 (`src/server`) y primer worker Python de ingesta (`src/workers/ingest`). `client/` (Avalonia) llega en la Fase 3. Fase 1.5: módulo de identidad (usuarios, login JWT, auditoría de accesos).
+Fase 1: servidor de custodia .NET 8 (`src/server`) y primer worker Python de ingesta (`src/workers/ingest`). `client/` (Avalonia) llega en la Fase 3. Fase 1.5: módulo de identidad (usuarios, login JWT, auditoría de accesos). Fase 2: worker de procesamiento (`src/workers/procesamiento`, OpenCV determinista), operaciones con derivados PNG y reproducción desde el asiento.
 
 La fuente de diseño es `docs/architecture.md`; los cambios de diseño se hacen ahí. Lo que sigue resume lo que condiciona el código.
 
@@ -26,6 +26,9 @@ py -3.12 -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
 .venv/Scripts/python -m pytest                    # un test: -k test_analizar_devuelve_hash_y_metadatos
 .venv/Scripts/python -m ruff check . && .venv/Scripts/python -m ruff format --check .
 
+# Worker de procesamiento: igual, desde src/workers/procesamiento. tests/test_png_determinista.py tiene
+# hashes dorados del PNG: si fallan, cambió el entorno y ningún derivado previo reproduciría.
+
 # Todo en local con Docker
 cp .env.example .env                              # definir POSTGRES_PASSWORD, JWT_CLAVE_DE_FIRMA y el seed del primer admin
 docker compose up -d --build                      # servidor :5065, worker :8000, PostgreSQL :5433 (sólo 127.0.0.1)
@@ -43,10 +46,10 @@ Las versiones NuGet están centralizadas en `Directory.Packages.props` (los `.cs
 ## Estructura
 
 - `src/server/Forensic.Domain`: agregados e invariantes. Sin paquetes externos; sólo BCL (SHA-256 incluido).
-- `src/server/Forensic.Application`: casos de uso (`ServicioDeCasos`, `ServicioDeEvidencias`, `ServicioDeCustodia`) y puertos (`IPersistenciaForense`, `IAlmacenDeEvidencia`, `IWorkerDeIngesta`, `IActorActual`). El reloj es `TimeProvider`: nunca usar `DateTime.Now` ni un timestamp que venga del cliente.
-- `src/server/Forensic.Infrastructure`: EF Core/Npgsql (`ContextoForense`, migraciones en `Persistencia/Migraciones`), cliente HTTP del worker (`Workers/WorkerDeIngestaHttp`, `WorkerIngesta:UrlBase`) y almacén de blobs en disco direccionado por hash (`raiz/ab/cd/<sha256>`, solo lectura).
-- `src/server/Forensic.Api`: controllers (`Controllers/`). Las excepciones se mapean a ProblemDetails en `ManejadorDeErrores` (401, 403 acceso, 404, 409 conflicto de cadena, 422 regla de dominio o contenido rechazado por el worker, 423 integridad comprometida, 502 divergencia del control cruzado).
-- `tests/Forensic.Domain.Tests` y `tests/Forensic.IntegrationTests` (`WebApplicationFactory` + Testcontainers `postgres:17`, entorno `Testing`). `ContratoDelWorkerDeIngestaTests` construye la imagen real del worker desde su Dockerfile y prueba el contrato JSON de `/v1/analizar` contra `WorkerDeIngestaHttp`. Ambos están en `Forensic.sln` aunque vivan fuera de `src/server`.
+- `src/server/Forensic.Application`: casos de uso (`ServicioDeCasos`, `ServicioDeEvidencias`, `ServicioDeCustodia`, `ServicioDeOperaciones`) y puertos (`IPersistenciaForense`, `IAlmacenDeEvidencia`, `IWorkerDeIngesta`, `IWorkerDeProcesamiento`, `IActorActual`). El reloj es `TimeProvider`: nunca usar `DateTime.Now` ni un timestamp que venga del cliente.
+- `src/server/Forensic.Infrastructure`: EF Core/Npgsql (`ContextoForense`, migraciones en `Persistencia/Migraciones`), clientes HTTP de los workers (`Workers/WorkerDeIngestaHttp`, `WorkerIngesta:UrlBase`; `Workers/WorkerDeProcesamientoHttp`, `WorkerProcesamiento:UrlBase`) y almacén de blobs en disco direccionado por hash (`raiz/ab/cd/<sha256>`, solo lectura).
+- `src/server/Forensic.Api`: controllers (`Controllers/`). Las excepciones se mapean a ProblemDetails en `ManejadorDeErrores` (401, 403 acceso, 404, 409 conflicto de cadena, 422 regla de dominio o contenido rechazado por el worker, 423 integridad o cadena comprometida, 502 divergencia del control cruzado, 503 worker caído).
+- `tests/Forensic.Domain.Tests` y `tests/Forensic.IntegrationTests` (`WebApplicationFactory` + Testcontainers `postgres:17`, entorno `Testing`). `ContratoDelWorkerDeIngestaTests` construye la imagen real del worker desde su Dockerfile y prueba el contrato JSON de `/v1/analizar` contra `WorkerDeIngestaHttp`; `ContratoDelWorkerDeProcesamientoTests` y `ReproduccionConOpenCvTests` hacen lo mismo con el worker de procesamiento (el gate de la Fase 2 corre contra OpenCV real). Ambos están en `Forensic.sln` aunque vivan fuera de `src/server`.
 - `src/workers/ingest`: FastAPI. `POST /v1/analizar` recibe el archivo en crudo y devuelve SHA-256 + metadatos de ffprobe. Su hash es un control cruzado sobre **los mismos bytes crudos** que hashea el servidor: si el worker llegara a normalizar, reporta el hash del crudo de entrada, nunca el de su salida. La fuente de verdad es el hash que calcula el servidor al ingestar. `ServicioDeEvidencias` guarda el crudo, lo relee verificado del almacén y se lo pasa al worker; recién después crea la evidencia y el asiento, cuyo detalle guarda el hash del worker y los metadatos. Una divergencia (el worker reporta otro hash sobre bytes ya verificados) es un evento de seguridad: `DivergenciaDeControlCruzadoException`, `LogCritical`, 502 y no hay ingesta. Si el worker no responde, la ingesta procede con `controlCruzado.estado = "pendiente"` y se completa después con `POST .../evidencias/{id}/control-cruzado`, que agrega un asiento `ControlCruzadoCompletado`; lo puede completar el analista asignado con el caso abierto o un supervisor aunque el caso esté cerrado, y los pendientes no bloquean el cierre (`crucesPendientes` en el asiento `CasoCerrado` y en el export; `controlCruzadoPendiente` por evidencia en el listado) (decisión 5 de "Decisiones cerradas" en `docs/architecture.md`). Si ffprobe no reconoce el formato, la evidencia se custodia igual con `metadatos: null` y `motivoSinMetadatos`. ffprobe se invoca con una lista de argumentos sobre una ruta temporal propia, nunca con el nombre de la evidencia.
 
 Detalles que no se ven a simple vista:
@@ -58,7 +61,8 @@ Detalles que no se ven a simple vista:
 - **Asentar en la cadena:** leer `ObtenerUltimoAsientoAsync` → `RegistroDeCustodia.Asentar(...)` → `Agregar` la entidad y el asiento → un solo `GuardarCambiosAsync`. El índice único `(CasoId, Secuencia)` serializa las escrituras concurrentes: el perdedor recibe `ConflictoDeCustodiaException` (409).
 - **Formato canónico del hash** (`AsientoDeCustodia.CalcularHash`, `forensic-video/custodia/v1`): campos con prefijo de longitud y timestamp UTC truncado a microsegundos (la precisión de PostgreSQL). Cambiarlo invalida todas las cadenas existentes: hay que versionarlo.
 - **Triggers append-only:** están en la migración `Inicial` (SQL a mano) y bloquean UPDATE/DELETE/TRUNCATE en `AsientosDeCustodia` y `Evidencias`.
-- `OperacionForense` y `Evidencia.Derivar` (doble vía) existen sólo en el dominio. La persistencia y los endpoints llegan con la Fase 2.
+- **Operaciones (Fase 2):** `CatalogoDeOperaciones` (dominio) y `CATALOGO` (worker) son espejo y sólo tienen operaciones deterministas de OpenCV: recorte, perspectiva, rotación (exacta y por ángulo), denoise (NL-means, mediana), realce (unsharp, CLAHE), tonal (brillo-contraste, gamma, ecualización) y extracción de frame. Tipos versionados (`opencv.recorte/v1`); parámetros sólo enteros o strings de lista cerrada (las magnitudes continuas en punto fijo: centésimas, milésimas), en JSON canónico que se asienta y se reenvía **sin re-serializar**. Sumar una operación: clase en `Domain/Operaciones` + entrada en los dos catálogos + filas en `CatalogoDeOperacionesTests`, tests de píxeles en `test_operaciones.py` y una fila en `ReproduccionConOpenCvTests`. Cambiar el comportamiento de una existente exige versión nueva (`/v2`).
+- **Asiento `OperacionAplicada`** (`forensic-video/operacion/v1`): tipo, parámetros y entorno como JSON crudo, entrada y salida con hashes, hash de píxeles y vía. `OperacionAsentada.Desde` lo lee; basta para reproducir. `POST .../reproducir` re-ejecuta desde ese asiento (sólo con la cadena íntegra) y asienta `OperacionReproducida`; `GET .../linaje` da el historial. Operación, derivado y asiento van en una sola transacción; `OperacionesForenses` es inmutable con triggers.
 
 ## Qué es
 
@@ -97,6 +101,8 @@ Log de custodia (prueba pericial, inmutable) y log técnico (Serilog/OpenTelemet
 ## Reproducibilidad
 
 Desde el log debe poder regenerarse cualquier salida a partir del original. Fijar versión de modelo, pesos, seeds y entorno (imagen Docker); documentar explícitamente el no-determinismo residual de modelos de deep learning.
+
+Reglas del worker de procesamiento (no negociables): `opencv-python-headless` y `numpy` con versión exacta; `entorno.configurar()` (un hilo, sin OpenCL, `useOptimized=False`) **en el mismo hilo que procesa**, porque OpenCL es por hilo en OpenCV; derivados siempre PNG con `codificar_png` (compresión y estrategia fijas, sólo IHDR/IDAT/IEND); decodificar con `IMREAD_UNCHANGED | IMREAD_IGNORE_ORIENTATION` (nunca aplicar la rotación EXIF) y rechazar multipágina; el entorno real se reporta en cada respuesta y va al asiento. La reproducción está garantizada **dentro de la misma imagen Docker**: entre plataformas difieren al menos la decodificación con pérdida (JPEG/MJPEG) y `math.pow` de la LUT de gamma (ver `docs/architecture.md`).
 
 ## Seguridad
 

@@ -1,5 +1,6 @@
 using Forensic.Application;
 using Forensic.Application.Identidad;
+using Forensic.Application.Operaciones;
 using Forensic.Infrastructure.Almacen;
 using Forensic.Infrastructure.Identidad;
 using Forensic.Infrastructure.Persistencia;
@@ -43,6 +44,15 @@ public static class DependencyInjection
             var opciones = sp.GetRequiredService<IOptions<OpcionesWorkerIngesta>>().Value;
             http.BaseAddress = opciones.UrlBase
                 ?? throw new InvalidOperationException($"Falta configurar {OpcionesWorkerIngesta.Seccion}:UrlBase.");
+            http.Timeout = opciones.Timeout;
+        });
+
+        services.AddOptions<OpcionesWorkerProcesamiento>().Bind(configuration.GetSection(OpcionesWorkerProcesamiento.Seccion));
+        services.AddHttpClient<IWorkerDeProcesamiento, WorkerDeProcesamientoHttp>((sp, http) =>
+        {
+            var opciones = sp.GetRequiredService<IOptions<OpcionesWorkerProcesamiento>>().Value;
+            http.BaseAddress = opciones.UrlBase
+                ?? throw new InvalidOperationException($"Falta configurar {OpcionesWorkerProcesamiento.Seccion}:UrlBase.");
             http.Timeout = opciones.Timeout;
         });
         return services;

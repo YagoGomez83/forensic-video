@@ -10,10 +10,18 @@ public class EvidenciaTests
 {
     private readonly Caso _caso = CasoDeAna();
 
+    /// <summary>Sólo para probar la doble vía: en el catálogo de la Fase 2 no hay operaciones con IA.</summary>
+    private sealed class OperacionConIa : DefinicionDeOperacion
+    {
+        public override string Tipo => "prueba.ia/v1";
+        public override bool UsaIa => true;
+        public override string ParametrosCanonicos => "{}";
+    }
+
     private OperacionForense Operacion(Evidencia entrada, bool usaIa, string salida) =>
         OperacionForense.Registrar(
-            _caso, entrada, usaIa ? "realesrgan.x4" : "opencv.denoise.nlmeans", "1.0.0", "{}", usaIa,
-            HashDe(salida), 2048, Ana, Ahora.AddMinutes(1));
+            _caso, entrada, usaIa ? new OperacionConIa() : Recorte.Crear(0, 0, 10, 10), EntornoDePrueba,
+            HashDe(salida), 2048, null, Ana, Ahora.AddMinutes(1));
 
     [Fact]
     public void Un_original_ingresa_admisible_en_juicio_y_sin_padre()

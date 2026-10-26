@@ -3,6 +3,7 @@ using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
+using Forensic.Domain.Operaciones;
 
 namespace Forensic.Application;
 
@@ -25,6 +26,7 @@ public interface IPersistenciaForense
     void Agregar(Caso caso);
     void Agregar(Evidencia evidencia);
     void Agregar(AsientoDeCustodia asiento);
+    void Agregar(OperacionForense operacion);
 
     /// <summary>
     /// Confirma todos los cambios en una sola transacción. Si otro proceso asentó en la misma

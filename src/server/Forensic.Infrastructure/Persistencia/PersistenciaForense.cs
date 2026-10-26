@@ -3,6 +3,7 @@ using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
+using Forensic.Domain.Operaciones;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -37,6 +38,7 @@ internal sealed class PersistenciaForense(ContextoForense db) : IPersistenciaFor
     public void Agregar(Caso caso) => db.Casos.Add(caso);
     public void Agregar(Evidencia evidencia) => db.Evidencias.Add(evidencia);
     public void Agregar(AsientoDeCustodia asiento) => db.AsientosDeCustodia.Add(asiento);
+    public void Agregar(OperacionForense operacion) => db.OperacionesForenses.Add(operacion);
 
     public async Task GuardarCambiosAsync(CancellationToken ct)
     {

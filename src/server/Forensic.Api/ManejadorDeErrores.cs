@@ -21,10 +21,13 @@ internal sealed class ManejadorDeErrores(IProblemDetailsService problemDetails) 
             ConflictoDeCustodiaException => (StatusCodes.Status409Conflict, "Conflicto en la cadena de custodia"),
             // Discrepancia de hash = bloqueo de la evidencia.
             IntegridadComprometidaException => (StatusCodes.Status423Locked, "Integridad de la evidencia comprometida"),
+            CadenaComprometidaException => (StatusCodes.Status423Locked, "Cadena de custodia comprometida"),
             IngestaRechazadaException => (StatusCodes.Status422UnprocessableEntity, "Ingesta rechazada"),
             // El problema es el worker upstream, no el contenido que mandó el cliente.
             DivergenciaDeControlCruzadoException => (StatusCodes.Status502BadGateway, "Divergencia en el control cruzado"),
             WorkerDeIngestaNoDisponibleException => (StatusCodes.Status503ServiceUnavailable, "Worker de ingesta no disponible"),
+            ProcesamientoRechazadoException => (StatusCodes.Status422UnprocessableEntity, "Operación rechazada"),
+            WorkerDeProcesamientoNoDisponibleException => (StatusCodes.Status503ServiceUnavailable, "Worker de procesamiento no disponible"),
             ExcepcionDeDominio => (StatusCodes.Status422UnprocessableEntity, "Regla forense violada"),
             _ => null,
         };
