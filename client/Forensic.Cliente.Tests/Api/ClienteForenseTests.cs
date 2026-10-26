@@ -31,8 +31,12 @@ public class ClienteForenseTests
     [Fact]
     public async Task Un_401_con_sesion_activa_la_expira_avisa_y_lanza_sesion_expirada()
     {
+        var llamadas = 0;
+        // La primera GET /casos es la del login; la segunda llega con el token ya vencido.
         _servidor.En(HttpMethod.Post, "/auth/login", HttpStatusCode.OK, Token)
-            .En(HttpMethod.Get, "/casos", _ => ServidorFalso.Problema(HttpStatusCode.Unauthorized, "No autenticado", "token vencido"));
+            .En(HttpMethod.Get, "/casos", _ => ++llamadas == 1
+                ? ServidorFalso.Respuesta(HttpStatusCode.OK, Array.Empty<object>())
+                : ServidorFalso.Problema(HttpStatusCode.Unauthorized, "No autenticado", "token vencido"));
         var cliente = Cliente();
         await cliente.IniciarSesionAsync("lucia", "su contrasena", CancellationToken.None);
         var avisos = 0;

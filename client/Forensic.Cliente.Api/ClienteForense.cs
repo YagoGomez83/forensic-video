@@ -63,10 +63,37 @@ public sealed class ClienteForense
         return new ClienteForense(http, sesion);
     }
 
-    public async Task IniciarSesionAsync(string usuario, string contrasena, CancellationToken ct)
+    public async Task<EstadoDeInicio> IniciarSesionAsync(string usuario, string contrasena, CancellationToken ct)
     {
         var token = await EnviarAsync<TokenEmitido>(HttpMethod.Post, "auth/login", new { usuario, contrasena }, ct);
         _sesion.Iniciar(token.Token, token.ExpiraEn);
+        return await RequiereCambioDeContrasenaAsync(ct) ? EstadoDeInicio.DebeCambiarContrasena : EstadoDeInicio.Listo;
+    }
+
+    /// <summary>Cambio de la propia contraseña. El servidor devuelve un token nuevo, que reemplaza al anterior.</summary>
+    public async Task CambiarContrasenaAsync(string actual, string nueva, CancellationToken ct)
+    {
+        var token = await EnviarAsync<TokenEmitido>(HttpMethod.Post, "auth/contrasena", new { actual, nueva }, ct);
+        _sesion.Iniciar(token.Token, token.ExpiraEn);
+    }
+
+    /// <summary>
+    /// La respuesta del login no dice si la contraseña es temporal (decisión (b) de la Fase 3, sin tocar
+    /// el backend). Con una contraseña temporal el servidor sólo permite cambiarla, así que GET /casos,
+    /// que cualquier sesión completa puede pedir, responde 403. Si el login empieza a informarlo, sólo
+    /// cambia este método.
+    /// </summary>
+    private async Task<bool> RequiereCambioDeContrasenaAsync(CancellationToken ct)
+    {
+        try
+        {
+            await ListarCasosAsync(ct);
+            return false;
+        }
+        catch (ErrorDeApi ex) when (ex.Tipo == TipoDeError.AccesoDenegado)
+        {
+            return true;
+        }
     }
 
     public Task<IReadOnlyList<CasoDto>> ListarCasosAsync(CancellationToken ct) =>

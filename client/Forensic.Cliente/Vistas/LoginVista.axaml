@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Forensic.Cliente.Nucleo.Sesion"
+             x:Class="Forensic.Cliente.Vistas.LoginVista"
+             x:DataType="vm:LoginViewModel">
+  <StackPanel Width="360" Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Text="Forensic Video" FontSize="24" FontWeight="SemiBold" />
+    <TextBlock Text="{Binding Servidor, StringFormat='Servidor: {0}'}" Opacity="0.7" />
+    <TextBlock Classes="aviso" Text="{Binding Aviso}" IsVisible="{Binding Aviso, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    <TextBox x:Name="Usuario" Watermark="Usuario" Text="{Binding Usuario}" />
+    <TextBox x:Name="Contrasena" Watermark="Contraseña" PasswordChar="●" Text="{Binding Contrasena}" />
+    <Button x:Name="Entrar" Content="Entrar" IsDefault="True" HorizontalAlignment="Stretch"
+            Command="{Binding IniciarCommand}" />
+    <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+  </StackPanel>
+</UserControl>

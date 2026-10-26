@@ -6,6 +6,14 @@ namespace Forensic.Cliente.Api;
 
 public sealed record TokenEmitido(string Token, DateTimeOffset ExpiraEn);
 
+public enum EstadoDeInicio
+{
+    Listo,
+
+    /// <summary>Contraseña inicial o reseteada: hasta cambiarla, el servidor no permite otra cosa.</summary>
+    DebeCambiarContrasena,
+}
+
 public enum EstadoCaso
 {
     Abierto = 1,

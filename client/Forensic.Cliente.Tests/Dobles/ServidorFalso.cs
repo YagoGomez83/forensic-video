@@ -12,6 +12,9 @@ internal sealed class ServidorFalso : HttpMessageHandler
 
     public List<HttpRequestMessage> Peticiones { get; } = [];
 
+    /// <summary>El cuerpo de cada petición como texto, capturado al recibirla (el cliente después la libera).</summary>
+    public List<string?> Cuerpos { get; } = [];
+
     public bool Inalcanzable { get; set; }
 
     public ServidorFalso En(HttpMethod metodo, string ruta, Func<HttpRequestMessage, HttpResponseMessage> responder)
@@ -40,8 +43,7 @@ internal sealed class ServidorFalso : HttpMessageHandler
         if (Inalcanzable)
             throw new HttpRequestException("No se puede establecer una conexión.", new System.Net.Sockets.SocketException(10061));
         // Se consume el cuerpo para que los tests puedan inspeccionarlo después.
-        if (peticion.Content is not null)
-            await peticion.Content.LoadIntoBufferAsync();
+        Cuerpos.Add(peticion.Content is null ? null : await peticion.Content.ReadAsStringAsync(ct));
         Peticiones.Add(peticion);
         var ruta = peticion.RequestUri!.PathAndQuery;
         foreach (var (metodo, patron, responder) in _rutas)

@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Forensic.Cliente.Nucleo.Casos"
+             x:Class="Forensic.Cliente.Vistas.CasosVista"
+             x:DataType="vm:CasosViewModel">
+  <TextBlock Text="Casos" Margin="16" FontSize="20" />
+</UserControl>

@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using Forensic.Api.Controllers;
 using Forensic.Cliente.Api;
 using Forensic.Domain.Comun;
 
@@ -41,7 +43,7 @@ public class ContratoDelClienteDeEscritorioTests(ServidorForense servidor) : ICl
     [Fact]
     public async Task Las_credenciales_malas_dan_el_error_generico_del_servidor()
     {
-        var ex = await Assert.ThrowsAsync<ErrorDeApi>(() => Cliente().IniciarSesionAsync("nadie", "una contrasena cualquiera", CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ErrorDeApi>(async () => await Cliente().IniciarSesionAsync("nadie", "una contrasena cualquiera", CancellationToken.None));
 
         Assert.Equal(TipoDeError.CredencialesInvalidas, ex.Tipo);
         Assert.Equal("Usuario o contraseña incorrectos.", ex.Message);
@@ -59,5 +61,22 @@ public class ContratoDelClienteDeEscritorioTests(ServidorForense servidor) : ICl
 
         Assert.True(expirada);
         Assert.False(sesion.Activa);
+    }
+
+    [Fact]
+    public async Task Con_una_contrasena_temporal_el_cliente_detecta_el_cambio_obligatorio_y_tras_cambiarla_queda_listo()
+    {
+        var nombre = $"tmp-{Guid.NewGuid():N}"[..16];
+        var admin = await servidor.AdminAsync();
+        (await admin.PostAsJsonAsync("/usuarios", new CrearUsuarioRequest(nombre, Rol.Analista, "contrasena temporal 2026"), ServidorForense.Json))
+            .EnsureSuccessStatusCode();
+        var cliente = Cliente();
+
+        Assert.Equal(EstadoDeInicio.DebeCambiarContrasena, await cliente.IniciarSesionAsync(nombre, "contrasena temporal 2026", CancellationToken.None));
+        await cliente.CambiarContrasenaAsync("contrasena temporal 2026", "la frase definitiva", CancellationToken.None);
+
+        // Con la contraseña cambiada la sesión ya es completa: listar casos no da 403.
+        await cliente.ListarCasosAsync(CancellationToken.None);
+        Assert.Equal(EstadoDeInicio.Listo, await Cliente().IniciarSesionAsync(nombre, "la frase definitiva", CancellationToken.None));
     }
 }
