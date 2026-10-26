@@ -1,0 +1,32 @@
+# Versiones exactas de TODO lo que entra en la imagen del worker de IA, transitivas incluidas (CUDA,
+# cuDNN): son parte de la procedencia que va al asiento. Se regenera desde la imagen construida:
+#   docker run --rm --entrypoint pip <imagen> freeze --all
+# y test_restricciones.py exige que coincidan con las dependencias directas de pyproject.toml.
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+click==8.5.0
+fastapi==0.160.0
+flatbuffers==25.12.19
+h11==0.16.0
+idna==3.20
+numpy==2.5.4
+nvidia-cublas==13.8.1.7
+nvidia-cuda-nvrtc==13.4.92
+nvidia-cuda-runtime==13.4.92
+nvidia-cudnn-cu13==9.27.0.42
+nvidia-cufft==12.4.0.43
+nvidia-curand==10.4.4.72
+nvidia-nvjitlink==13.4.92
+onnxruntime-gpu==1.31.0
+opencv-python-headless==4.14.0.94
+opentelemetry-api==1.45.1
+packaging==26.3
+protobuf==7.36.2
+pydantic==2.14.1
+pydantic_core==2.50.1
+python-multipart==0.0.32
+starlette==1.10.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+uvicorn==0.54.0

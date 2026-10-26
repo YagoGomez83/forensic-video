@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forensic-ia-worker"
+version = "0.1.0"
+description = "Worker de IA (sólo investigación): modelos ONNX con pesos clavados y verificados por hash."
+requires-python = ">=3.12"
+# Versiones exactas: van al asiento como procedencia. onnxruntime-gpu usa CUDA si está y si no
+# cae a CPU; las bibliotecas de CUDA sólo se instalan en la imagen (extra «gpu»).
+dependencies = [
+    "fastapi==0.160.0",
+    "uvicorn==0.54.0",
+    "python-multipart==0.0.32",
+    "numpy==2.5.4",
+    "opencv-python-headless==4.14.0.94",
+    "onnxruntime-gpu==1.31.0",
+]
+
+[project.optional-dependencies]
+gpu = ["onnxruntime-gpu[cuda,cudnn]==1.31.0"]
+dev = [
+    "httpx==0.28.1",
+    "pytest==9.1.1",
+    "ruff==0.17.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["modelos.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S108", "S603"]
