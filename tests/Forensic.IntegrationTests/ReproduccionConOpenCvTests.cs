@@ -65,6 +65,21 @@ public sealed class ReproduccionConOpenCvTests : IClassFixture<ServidorForense>,
         Assert.Equal((1, false), (entorno.GetProperty("hilos").GetInt32(), entorno.GetProperty("optimizado").GetBoolean()));
     }
 
+    /// <summary>El gate, operación por operación, sobre una imagen BGR de 64x48.</summary>
+    [Theory]
+    [InlineData("opencv.perspectiva/v1", """{"x1":3,"y1":2,"x2":60,"y2":4,"x3":62,"y3":45,"x4":1,"y4":44,"ancho":40,"alto":30,"interpolacion":"cubica"}""")]
+    public async Task Cada_operacion_del_catalogo_se_reproduce_byte_a_byte_con_opencv(string tipo, string parametros)
+    {
+        var (casoId, original) = await CasoConImagenAsync();
+        var r = await _ana.AplicarOperacionAsync(casoId, original.Id, tipo, JsonDocument.Parse(parametros).RootElement);
+        var aplicada = await r.LeerAsync<OperacionAplicadaDto>();
+
+        var resultado = await (await _ana.ReproducirAsync(casoId, aplicada.Derivado.Id)).LeerAsync<ResultadoDeReproduccion>();
+
+        Assert.True(resultado.Reproducido, $"{tipo}: esperado {resultado.Sha256Esperado}, obtenido {resultado.Sha256Obtenido}");
+        Assert.Equal(resultado.Sha256PixelesEsperado, resultado.Sha256PixelesObtenido);
+    }
+
     [Fact]
     public async Task Una_region_fuera_de_la_imagen_la_rechaza_el_worker_real_con_422()
     {

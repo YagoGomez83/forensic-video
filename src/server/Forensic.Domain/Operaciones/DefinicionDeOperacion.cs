@@ -60,6 +60,7 @@ public static class CatalogoDeOperaciones
     private static readonly Dictionary<string, Func<LectorDeParametros, OperacionDeterminista>> Operaciones = new()
     {
         [Recorte.TipoVersionado] = Recorte.Desde,
+        [Perspectiva.TipoVersionado] = Perspectiva.Desde,
     };
 
     public static IReadOnlyCollection<string> Tipos => Operaciones.Keys;
@@ -98,6 +99,17 @@ public sealed class LectorDeParametros
         if (valor.ValueKind != JsonValueKind.Number || !valor.TryGetInt32(out var entero))
             throw new ExcepcionDeDominio($"El parámetro '{nombre}' de '{_tipo}' debe ser un entero.");
         return entero;
+    }
+
+    /// <summary>Un string de una lista cerrada, p. ej. el modo de interpolación.</summary>
+    public string Opcion(string nombre, params string[] opciones)
+    {
+        _leidos.Add(nombre);
+        if (!_parametros.TryGetProperty(nombre, out var valor))
+            throw new ExcepcionDeDominio($"'{_tipo}' requiere el parámetro '{nombre}'.");
+        if (valor.ValueKind != JsonValueKind.String || !opciones.Contains(valor.GetString(), StringComparer.Ordinal))
+            throw new ExcepcionDeDominio($"El parámetro '{nombre}' de '{_tipo}' debe ser uno de: {string.Join(", ", opciones)}.");
+        return valor.GetString()!;
     }
 
     internal void ExigirSinSobrantes()

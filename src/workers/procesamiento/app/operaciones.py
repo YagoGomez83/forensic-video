@@ -8,9 +8,13 @@ import json
 from collections.abc import Callable
 from typing import Any
 
+import cv2
 import numpy as np
 
 LADO_MAXIMO = 65_535
+PIXELES_MAXIMOS = 100_000_000
+
+INTERPOLACIONES = {"vecino": cv2.INTER_NEAREST, "lineal": cv2.INTER_LINEAR, "cubica": cv2.INTER_CUBIC}
 
 
 class ParametrosInvalidos(ValueError):
@@ -41,6 +45,15 @@ class Parametros:
             raise ParametrosInvalidos(f"El parámetro '{nombre}' debe estar entre {minimo} y {maximo}.")
         return valor
 
+    def opcion(self, nombre: str, opciones: tuple[str, ...]) -> str:
+        self._leidos.add(nombre)
+        if nombre not in self._valores:
+            raise ParametrosInvalidos(f"'{self._operacion}' requiere el parámetro '{nombre}'.")
+        valor = self._valores[nombre]
+        if not isinstance(valor, str) or valor not in opciones:
+            raise ParametrosInvalidos(f"El parámetro '{nombre}' debe ser uno de: {', '.join(opciones)}.")
+        return valor
+
     def exigir_sin_sobrantes(self) -> None:
         sobrantes = sorted(set(self._valores) - self._leidos)
         if sobrantes:
@@ -61,8 +74,39 @@ def recorte(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
     return np.ascontiguousarray(pixeles[y : y + alto, x : x + ancho])
 
 
+def _interpolacion(p: Parametros) -> int:
+    return INTERPOLACIONES[p.opcion("interpolacion", tuple(INTERPOLACIONES))]
+
+
+def perspectiva(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    alto_imagen, ancho_imagen = pixeles.shape[:2]
+    puntos = []
+    for i in range(1, 5):
+        x, y = p.entero(f"x{i}", 0, LADO_MAXIMO), p.entero(f"y{i}", 0, LADO_MAXIMO)
+        if x >= ancho_imagen or y >= alto_imagen:
+            raise ParametrosInvalidos(
+                f"El punto {i} ({x},{y}) cae fuera de la imagen de {ancho_imagen}x{alto_imagen}."
+            )
+        puntos.append((x, y))
+    ancho, alto = p.entero("ancho", 1, LADO_MAXIMO), p.entero("alto", 1, LADO_MAXIMO)
+    if ancho * alto > PIXELES_MAXIMOS:
+        raise ParametrosInvalidos(f"La salida no puede superar {PIXELES_MAXIMOS} píxeles.")
+    interpolacion = _interpolacion(p)
+    p.exigir_sin_sobrantes()
+
+    origen = np.float32(puntos)
+    if not cv2.isContourConvex(origen) or cv2.contourArea(origen) <= 0:
+        raise ParametrosInvalidos("Los cuatro puntos deben formar un cuadrilátero convexo, en orden.")
+    destino = np.float32([[0, 0], [ancho - 1, 0], [ancho - 1, alto - 1], [0, alto - 1]])
+    matriz = cv2.getPerspectiveTransform(origen, destino)
+    return cv2.warpPerspective(
+        pixeles, matriz, (ancho, alto), flags=interpolacion, borderMode=cv2.BORDER_CONSTANT, borderValue=0
+    )
+
+
 CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.recorte/v1": recorte,
+    "opencv.perspectiva/v1": perspectiva,
 }
 
 
