@@ -191,4 +191,27 @@ public class FormulariosTests
     {
         Assert.Equal("{}", Json(new FormularioDeEcualizacion().Parametros(SinMarcas)));
     }
+
+    [Fact]
+    public void La_extraccion_de_frame_envia_el_indice_y_no_necesita_ver_la_imagen()
+    {
+        var f = new FormularioDeFrame { Indice = 5 };
+
+        Assert.Equal("""{"indice":5}""", Json(f.Parametros(SinMarcas)));
+        Assert.False(f.NecesitaImagen);
+    }
+
+    [Fact]
+    public async Task Sin_previsualizacion_el_visor_solo_ofrece_lo_que_no_necesita_ver_la_imagen()
+    {
+        var vm = new VisorViewModel(
+            ClienteForense.Crear(new Uri("http://servidor/"), new SesionEnMemoria(), new ServidorFalso()), new NavegacionRegistrada(), null,
+            await VisorViewModelTests.EvidenciaDtoAsync(nombre: "cam1.mkv"));
+
+        vm.NoDecodificable();
+        Assert.Equal([typeof(FormularioDeFrame)], vm.FormulariosDisponibles.Select(f => f.GetType()));
+
+        vm.ImagenDecodificada(64, 48);
+        Assert.Equal(vm.Formularios, vm.FormulariosDisponibles);
+    }
 }

@@ -204,3 +204,16 @@ public sealed class FormularioDeEcualizacion : FormularioDeOperacion
 
     public override object Parametros(MarcasDelVisor marcas) => new { };
 }
+
+/// <summary>Extrae un frame de un video por su índice (desde 0). No necesita previsualizar el video.</summary>
+public sealed partial class FormularioDeFrame : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _indice = 0;
+
+    public override string Tipo => "opencv.frame/v1";
+    public override string Titulo => "Extraer un frame de video";
+    public override bool NecesitaImagen => false;
+
+    public override object Parametros(MarcasDelVisor marcas) => new { indice = Entero(Indice, "el índice del frame") };
+}

@@ -43,11 +43,19 @@ public sealed partial class VisorViewModel(
         new FormularioDeBrilloContraste(),
         new FormularioDeGamma(),
         new FormularioDeEcualizacion(),
+        new FormularioDeFrame(),
     ];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Modo))]
     private FormularioDeOperacion? _formularioElegido;
+
+    /// <summary>
+    /// Sin imagen a la vista (un video, un formato que no se previsualiza), sólo las operaciones que no
+    /// necesitan verla, como la extracción de frame.
+    /// </summary>
+    public IReadOnlyList<FormularioDeOperacion> FormulariosDisponibles =>
+        AnchoImagen > 0 ? Formularios : Formularios.Where(f => !f.NecesitaImagen).ToList();
 
     /// <summary>Qué marca el botón izquierdo sobre la imagen: una región o puntos.</summary>
     public ModoDeMarcado Modo => FormularioElegido?.Marcado is ModoDeMarcado.Puntos ? ModoDeMarcado.Puntos : ModoDeMarcado.Region;
@@ -69,6 +77,7 @@ public sealed partial class VisorViewModel(
     private string? _error;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FormulariosDisponibles))]
     private int _anchoImagen;
 
     [ObservableProperty]

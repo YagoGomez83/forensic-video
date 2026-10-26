@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeFrameVista"
+             x:DataType="op:FormularioDeFrame">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <TextBlock Text="Índice del frame (desde 0):" VerticalAlignment="Center" />
+    <NumericUpDown Width="150" Minimum="0" Increment="1" FormatString="0" Value="{Binding Indice}" />
+  </StackPanel>
+</UserControl>

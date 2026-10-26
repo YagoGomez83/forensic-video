@@ -27,6 +27,7 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
         { nameof(FormularioDeBrilloContraste), """{"brillo":-21,"contrasteCentesimas":137}""" },
         { nameof(FormularioDeGamma), """{"gammaMilesimas":2200}""" },
         { nameof(FormularioDeEcualizacion), """{}""" },
+        { nameof(FormularioDeFrame), """{"indice":5}""" },
     };
 
     private static (FormularioDeOperacion Formulario, MarcasDelVisor Marcas) Armar(string nombre) => nombre switch
@@ -42,6 +43,7 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
         nameof(FormularioDeBrilloContraste) => (new FormularioDeBrilloContraste { Contraste = 1.37m, Brillo = -21 }, new(null, [])),
         nameof(FormularioDeGamma) => (new FormularioDeGamma { Gamma = 2.2m }, new(null, [])),
         nameof(FormularioDeEcualizacion) => (new FormularioDeEcualizacion(), new(null, [])),
+        nameof(FormularioDeFrame) => (new FormularioDeFrame { Indice = 5 }, new(null, [])),
         _ => throw new ArgumentOutOfRangeException(nameof(nombre), nombre, null),
     };
 
