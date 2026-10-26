@@ -8,6 +8,7 @@
     <StackPanel DockPanel.Dock="Top" Margin="12" Spacing="4">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Content="← Caso" Command="{Binding VolverCommand}" />
+        <Button Content="Linaje y reproducción" Command="{Binding VerLinajeCommand}" />
         <TextBlock Text="{Binding Evidencia.NombreOriginal}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
         <TextBlock Text="{Binding Evidencia.Via}" VerticalAlignment="Center" Opacity="0.8" />
         <TextBlock Text="{Binding Transformacion.Zoom, StringFormat='Zoom {0:P0}'}" VerticalAlignment="Center" Opacity="0.7" />

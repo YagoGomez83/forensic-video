@@ -79,4 +79,39 @@ public class ContratoDelClienteDeEscritorioTests(ServidorForense servidor) : ICl
         await cliente.ListarCasosAsync(CancellationToken.None);
         Assert.Equal(EstadoDeInicio.Listo, await Cliente().IniciarSesionAsync(nombre, "la frase definitiva", CancellationToken.None));
     }
+
+    [Fact]
+    public async Task El_flujo_del_analista_de_punta_a_punta_con_el_cliente_tipado()
+    {
+        var cliente = await AnalistaAsync($"flujo-{Guid.NewGuid():N}"[..16]);
+        var ct = CancellationToken.None;
+        var caso = await cliente.AbrirCasoAsync($"EXP-{Guid.NewGuid():N}"[..20], "Flujo del escritorio", ct);
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(200_000);
+        var enviados = new List<long>();
+
+        var original = await cliente.IngestarAsync(caso.Id, "cámara 1.png", new MemoryStream(bytes), bytes.Length, enviados.Add, ct);
+        Assert.Equal(HashSha256.Calcular(bytes).Hex, original.Hash);
+        Assert.Equal(bytes.Length, enviados[^1]);
+        Assert.Equal(bytes, await cliente.DescargarContenidoAsync(caso.Id, original.Id, ct));
+
+        var aplicada = await cliente.AplicarOperacionAsync(caso.Id, original.Id, "opencv.recorte/v1", new { x = 5, y = 6, ancho = 16, alto = 9 }, null, ct);
+        Assert.Equal("""{"alto":9,"ancho":16,"x":5,"y":6}""", aplicada.Parametros);
+        Assert.Equal((original.Id, Forensic.Cliente.Api.ViaProcesamiento.AdmisibleEnJuicio), (aplicada.Derivado.PadreId, aplicada.Derivado.Via));
+        Assert.Equal(["cámara 1.png", "cámara 1-recorte.png"], (await cliente.ListarEvidenciasAsync(caso.Id, ct)).Select(e => e.NombreOriginal));
+
+        var reproduccion = await cliente.ReproducirAsync(caso.Id, aplicada.Derivado.Id, ct);
+        Assert.True(reproduccion.Reproducido);
+        Assert.Equal(aplicada.Derivado.Hash, reproduccion.Sha256Obtenido);
+
+        var linaje = await cliente.ObtenerLinajeAsync(caso.Id, aplicada.Derivado.Id, ct);
+        Assert.Equal([original.Id, aplicada.Derivado.Id], linaje.Select(e => e.Evidencia.Id));
+        Assert.Equal("opencv.recorte/v1", linaje[1].Operacion!.Tipo);
+        Assert.True(Assert.Single(linaje[1].Reproducciones).Reproducido);
+
+        var custodia = await cliente.ExportarCustodiaAsync(caso.Id, ct);
+        Assert.True(custodia.Verificacion.EsIntegra, custodia.Verificacion.Motivo);
+        Assert.Equal(
+            ["CasoAbierto", "EvidenciaIngestada", "EvidenciaAccedida", "OperacionAplicada", "OperacionReproducida"],
+            custodia.Asientos.Select(a => a.Tipo));
+    }
 }

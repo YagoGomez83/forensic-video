@@ -142,6 +142,14 @@ public sealed class ClienteForense
         EnviarAsync<OperacionAplicadaDto>(
             HttpMethod.Post, $"casos/{casoId}/evidencias/{evidenciaId}/operaciones", new { tipo, parametros, nombre }, ct);
 
+    /// <summary>El historial de una evidencia desde el original, con cada operación y sus reproducciones.</summary>
+    public Task<IReadOnlyList<EslabonDeLinaje>> ObtenerLinajeAsync(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        EnviarAsync<IReadOnlyList<EslabonDeLinaje>>(HttpMethod.Get, $"casos/{casoId}/evidencias/{evidenciaId}/linaje", null, ct);
+
+    /// <summary>El servidor re-ejecuta la operación de un derivado desde su asiento y compara byte a byte.</summary>
+    public Task<ResultadoDeReproduccion> ReproducirAsync(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        EnviarAsync<ResultadoDeReproduccion>(HttpMethod.Post, $"casos/{casoId}/evidencias/{evidenciaId}/reproducir", null, ct);
+
     /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);

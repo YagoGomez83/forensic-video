@@ -47,3 +47,17 @@ public sealed record ExportDeCustodia(
 
 /// <param name="Parametros">Los parámetros canónicos tal como quedaron asentados en el servidor.</param>
 public sealed record OperacionAplicadaDto(EvidenciaDto Derivado, Guid OperacionId, string Tipo, string Parametros, string Entorno);
+
+public sealed record OperacionDelLinaje(
+    long Secuencia, string Tipo, string Parametros, Guid EvidenciaEntradaId, string Entorno, ViaProcesamiento Via,
+    string Actor, DateTimeOffset Timestamp);
+
+public sealed record ReproduccionDelLinaje(long Secuencia, bool Reproducido, bool EntornoCoincide, string Actor, DateTimeOffset Timestamp);
+
+public sealed record EslabonDeLinaje(EvidenciaDto Evidencia, OperacionDelLinaje? Operacion, IReadOnlyList<ReproduccionDelLinaje> Reproducciones);
+
+/// <summary>El veredicto del servidor al re-ejecutar una operación desde su asiento.</summary>
+public sealed record ResultadoDeReproduccion(
+    Guid EvidenciaId, bool Reproducido, bool EntornoCoincide,
+    string Sha256Esperado, string Sha256Obtenido, string? Sha256PixelesEsperado, string Sha256PixelesObtenido,
+    string EntornoAsentado, string EntornoActual);

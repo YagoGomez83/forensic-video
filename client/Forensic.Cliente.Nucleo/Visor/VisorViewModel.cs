@@ -130,6 +130,9 @@ public sealed partial class VisorViewModel(
     }
 
     [RelayCommand]
+    private void VerLinaje() => navegacion.IrA(new LinajeViewModel(api, navegacion, this, Evidencia));
+
+    [RelayCommand]
     private void Volver()
     {
         if (volverA is not null)
