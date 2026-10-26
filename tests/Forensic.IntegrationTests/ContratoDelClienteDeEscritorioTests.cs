@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Forensic.Api.Controllers;
 using Forensic.Cliente.Api;
 using Forensic.Domain.Comun;
@@ -113,5 +113,45 @@ public class ContratoDelClienteDeEscritorioTests(ServidorForense servidor) : ICl
         Assert.Equal(
             ["CasoAbierto", "EvidenciaIngestada", "EvidenciaAccedida", "OperacionAplicada", "OperacionReproducida"],
             custodia.Asientos.Select(a => a.Tipo));
+    }
+
+    [Fact]
+    public async Task Un_reporte_de_ia_reenviado_por_el_cliente_vuelve_tipado_y_marcado_solo_investigacion()
+    {
+        var ct = CancellationToken.None;
+        var cliente = await AnalistaAsync($"ia-{Guid.NewGuid():N}"[..16]);
+        var caso = await cliente.AbrirCasoAsync($"EXP-{Guid.NewGuid():N}"[..20], "Prueba de IA", ct);
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(2048);
+        var original = await cliente.IngestarAsync(caso.Id, "cam1.png", new MemoryStream(bytes), bytes.Length, null, ct);
+        // Tal como lo devuelve POST /v1/detectar del worker de IA.
+        var reporte = $$$"""
+            {"analisis": "ia.deteccion/v1", "parametros": {"umbralConfianzaMilesimas": 500},
+             "modelo": {"id": "yolox-s", "version": "0.1.1rc0", "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"},
+             "entrada": {"sha256": "{{{original.Hash}}}", "ancho": 32, "alto": 32},
+             "entorno": {"proveedor": "CPUExecutionProvider"},
+             "hallazgos": [{"region": {"x": 1, "y": 2, "ancho": 3, "alto": 4}, "clase": "car", "confianza": 0.8213145732879639,
+                            "crudo": {"puntaje": 0.8213145732879639}}]}
+            """;
+
+        var analisis = await cliente.RegistrarAnalisisIaAsync(caso.Id, original.Id, reporte, ct);
+
+        Assert.Equal(Forensic.Cliente.Api.ViaProcesamiento.SoloInvestigacion, analisis.Via);
+        Assert.Equal(new Forensic.Cliente.Api.ModeloDeIaDto("yolox-s", "0.1.1rc0", "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"), analisis.Modelo);
+        var hallazgo = Assert.Single(analisis.Hallazgos);
+        Assert.Equal(new Forensic.Cliente.Api.RegionDto(1, 2, 3, 4), hallazgo.Region);
+        Assert.Equal(("car", (string?)null, 0.8213145732879639m), (hallazgo.Clase, hallazgo.TextoLeido, hallazgo.Confianza));
+        Assert.Equal("""{"puntaje": 0.8213145732879639}""", hallazgo.Crudo);
+        Assert.Equal(Forensic.Cliente.Api.ViaProcesamiento.SoloInvestigacion, hallazgo.Via);
+        Assert.Equal(analisis, Assert.Single(await cliente.ListarAnalisisIaAsync(caso.Id, original.Id, ct)), new MismoAnalisis());
+        Assert.Equal("HallazgosRegistrados", (await cliente.ExportarCustodiaAsync(caso.Id, ct)).Asientos[^1].Tipo);
+    }
+
+    /// <summary>Los records con listas no se comparan por valor: se compara el id y los hallazgos uno por uno.</summary>
+    private sealed class MismoAnalisis : IEqualityComparer<Forensic.Cliente.Api.AnalisisIaDto>
+    {
+        public bool Equals(Forensic.Cliente.Api.AnalisisIaDto? a, Forensic.Cliente.Api.AnalisisIaDto? b) =>
+            a is not null && b is not null && a.Id == b.Id && a.Hallazgos.SequenceEqual(b.Hallazgos);
+
+        public int GetHashCode(Forensic.Cliente.Api.AnalisisIaDto a) => a.Id.GetHashCode();
     }
 }
