@@ -1,0 +1,6 @@
+# Sólo para exportar los pesos originales (.pth) a ONNX, una vez y fuera de la imagen del worker.
+# PyTorch nunca entra en el worker: la imagen sólo lleva onnxruntime y los .onnx resultantes.
+torch==2.14.1
+onnx==1.23.2
+onnxruntime==1.31.0
+numpy==2.5.4
