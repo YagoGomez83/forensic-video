@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\server\Forensic.Api\Forensic.Api.csproj" />
+    <!-- Los contratos del cliente de escritorio se cruzan con el servidor real. -->
+    <ProjectReference Include="..\..\client\Forensic.Cliente.Api\Forensic.Cliente.Api.csproj" />
   </ItemGroup>
 
 </Project>

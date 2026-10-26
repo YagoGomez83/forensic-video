@@ -1,0 +1,6 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Forensic.Cliente.Vistas.VentanaPrincipal"
+        Title="Forensic Video" Width="1280" Height="800">
+  <ContentControl x:Name="Contenido" />
+</Window>

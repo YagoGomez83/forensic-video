@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ViewModels y lógica de presentación testeable. Sin vistas. -->
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Forensic.Cliente.Api\Forensic.Cliente.Api.csproj" />
+  </ItemGroup>
+
+</Project>

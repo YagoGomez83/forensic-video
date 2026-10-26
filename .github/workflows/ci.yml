@@ -26,6 +26,18 @@ jobs:
           dotnet list src/server/Forensic.sln package --vulnerable --include-transitive | tee vulnerables.txt
           if grep -q "has the following vulnerable packages" vulnerables.txt; then exit 1; fi
 
+  cliente:
+    name: Cliente de escritorio (build + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build client/Forensic.Cliente.sln -c Release
+      # ViewModels con dobles de la API y Avalonia.Headless para los bindings y el visor: sin pantalla.
+      - run: dotnet test client/Forensic.Cliente.sln -c Release --no-build
+
   worker-ingest:
     name: Worker de ingesta (lint + test)
     runs-on: ubuntu-latest

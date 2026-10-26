@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Cliente tipado de la API REST. Sin Avalonia y sin referencias al servidor: el cliente define sus
+       propios contratos y no puede usar lógica forense ni por accidente. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Forensic.Cliente.Tests" />
+  </ItemGroup>
+
+</Project>
