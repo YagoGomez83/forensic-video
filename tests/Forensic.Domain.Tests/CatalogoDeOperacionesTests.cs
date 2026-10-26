@@ -18,6 +18,8 @@ public class CatalogoDeOperacionesTests
         },
         { "opencv.rotacion90/v1", """{"giros":3}""", """{"giros":3}""" },
         { "opencv.rotacion/v1", """{"interpolacion":"cubica","centesimasDeGrado":-1250}""", """{"centesimasDeGrado":-1250,"interpolacion":"cubica"}""" },
+        { "opencv.denoise.nlmeans/v1", """{"h":10,"hColor":10,"plantilla":7,"busqueda":21}""", """{"busqueda":21,"h":10,"hColor":10,"plantilla":7}""" },
+        { "opencv.denoise.mediana/v1", """{"ventana":5}""", """{"ventana":5}""" },
     };
 
     public static TheoryData<string, string> Invalidas => new()
@@ -33,6 +35,13 @@ public class CatalogoDeOperacionesTests
         { "opencv.rotacion/v1", """{"centesimasDeGrado":0,"interpolacion":"lineal"}""" },
         { "opencv.rotacion/v1", """{"centesimasDeGrado":36001,"interpolacion":"lineal"}""" },
         { "opencv.rotacion/v1", """{"centesimasDeGrado":90}""" },
+        // Denoise: ventanas pares, búsqueda menor que la plantilla, fuerza fuera de rango.
+        { "opencv.denoise.nlmeans/v1", """{"h":10,"hColor":10,"plantilla":6,"busqueda":21}""" },
+        { "opencv.denoise.nlmeans/v1", """{"h":10,"hColor":10,"plantilla":9,"busqueda":7}""" },
+        { "opencv.denoise.nlmeans/v1", """{"h":0,"hColor":10,"plantilla":7,"busqueda":21}""" },
+        { "opencv.denoise.nlmeans/v1", """{"h":101,"hColor":10,"plantilla":7,"busqueda":21}""" },
+        { "opencv.denoise.mediana/v1", """{"ventana":4}""" },
+        { "opencv.denoise.mediana/v1", """{"ventana":17}""" },
     };
 
     [Theory]

@@ -135,3 +135,51 @@ def test_rotacion_por_angulo_es_determinista_en_bytes():
 def test_rotacion90_rechaza_parametros_invalidos(parametros):
     with pytest.raises(ParametrosInvalidos):
         aplicar("opencv.rotacion90/v1", BGR, **parametros)
+
+
+# --- denoise -------------------------------------------------------------------------------------
+
+GRIS_8 = rng.integers(0, 256, (60, 100), dtype=np.uint8)
+NLMEANS = {"h": 10, "hColor": 12, "plantilla": 7, "busqueda": 21}
+
+
+def test_nlmeans_en_color_es_fast_nl_means_colored():
+    salida = aplicar("opencv.denoise.nlmeans/v1", BGR, **NLMEANS)
+
+    assert np.array_equal(salida, cv2.fastNlMeansDenoisingColored(BGR, None, 10, 12, 7, 21))
+
+
+def test_nlmeans_en_gris_es_fast_nl_means():
+    salida = aplicar("opencv.denoise.nlmeans/v1", GRIS_8, **NLMEANS)
+
+    assert np.array_equal(salida, cv2.fastNlMeansDenoising(GRIS_8, None, 10, 7, 21))
+
+
+def test_nlmeans_es_determinista_en_bytes():
+    a = aplicar("opencv.denoise.nlmeans/v1", BGR, **NLMEANS)
+    b = aplicar("opencv.denoise.nlmeans/v1", BGR.copy(), **NLMEANS)
+
+    assert codificar_png(a) == codificar_png(b)
+
+
+@pytest.mark.parametrize("pixeles", [GRIS_16, rng.integers(0, 256, (20, 20, 4), dtype=np.uint8)])
+def test_nlmeans_rechaza_lo_que_no_es_gris_o_bgr_de_8_bits(pixeles):
+    with pytest.raises(ParametrosInvalidos):
+        aplicar("opencv.denoise.nlmeans/v1", pixeles, **NLMEANS)
+
+
+@pytest.mark.parametrize("pixeles", [BGR, GRIS_16])
+def test_mediana_es_median_blur(pixeles):
+    salida = aplicar("opencv.denoise.mediana/v1", pixeles, ventana=5)
+
+    assert np.array_equal(salida, cv2.medianBlur(pixeles, 5))
+
+
+def test_mediana_de_16_bits_solo_admite_ventanas_de_3_o_5():
+    with pytest.raises(ParametrosInvalidos):
+        aplicar("opencv.denoise.mediana/v1", GRIS_16, ventana=7)
+
+
+def test_mediana_rechaza_ventanas_pares():
+    with pytest.raises(ParametrosInvalidos):
+        aplicar("opencv.denoise.mediana/v1", BGR, ventana=4)

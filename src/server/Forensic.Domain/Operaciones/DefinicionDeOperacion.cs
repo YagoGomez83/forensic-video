@@ -63,6 +63,8 @@ public static class CatalogoDeOperaciones
         [Perspectiva.TipoVersionado] = Perspectiva.Desde,
         [Rotacion90.TipoVersionado] = Rotacion90.Desde,
         [Rotacion.TipoVersionado] = Rotacion.Desde,
+        [DenoiseNlMeans.TipoVersionado] = DenoiseNlMeans.Desde,
+        [DenoiseMediana.TipoVersionado] = DenoiseMediana.Desde,
     };
 
     public static IReadOnlyCollection<string> Tipos => Operaciones.Keys;

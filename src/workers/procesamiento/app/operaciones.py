@@ -127,11 +127,45 @@ def rotacion(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
     )
 
 
+def _impar(p: Parametros, nombre: str, minimo: int, maximo: int) -> int:
+    valor = p.entero(nombre, minimo, maximo)
+    if valor % 2 == 0:
+        raise ParametrosInvalidos(f"La ventana '{nombre}' debe ser impar.")
+    return valor
+
+
+def _es_gris_o_bgr(pixeles: np.ndarray) -> bool:
+    return pixeles.ndim == 2 or (pixeles.ndim == 3 and pixeles.shape[2] == 3)
+
+
+def denoise_nlmeans(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    h, h_color = p.entero("h", 1, 100), p.entero("hColor", 0, 100)
+    plantilla, busqueda = _impar(p, "plantilla", 3, 21), _impar(p, "busqueda", 3, 51)
+    p.exigir_sin_sobrantes()
+    if busqueda < plantilla:
+        raise ParametrosInvalidos("La ventana de búsqueda no puede ser menor que la plantilla.")
+    if pixeles.dtype != np.uint8 or not _es_gris_o_bgr(pixeles):
+        raise ParametrosInvalidos("NL-means admite imágenes en gris o BGR de 8 bits.")
+    if pixeles.ndim == 2:
+        return cv2.fastNlMeansDenoising(pixeles, None, h, plantilla, busqueda)
+    return cv2.fastNlMeansDenoisingColored(pixeles, None, h, h_color, plantilla, busqueda)
+
+
+def denoise_mediana(pixeles: np.ndarray, p: Parametros) -> np.ndarray:
+    ventana = _impar(p, "ventana", 3, 15)
+    p.exigir_sin_sobrantes()
+    if pixeles.dtype != np.uint8 and ventana > 5:
+        raise ParametrosInvalidos("En imágenes de más de 8 bits la mediana sólo admite ventanas de 3 o 5.")
+    return cv2.medianBlur(pixeles, ventana)
+
+
 CATALOGO: dict[str, Callable[[np.ndarray, Parametros], np.ndarray]] = {
     "opencv.recorte/v1": recorte,
     "opencv.perspectiva/v1": perspectiva,
     "opencv.rotacion90/v1": rotacion90,
     "opencv.rotacion/v1": rotacion,
+    "opencv.denoise.nlmeans/v1": denoise_nlmeans,
+    "opencv.denoise.mediana/v1": denoise_mediana,
 }
 
 
