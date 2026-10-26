@@ -71,7 +71,7 @@ public sealed class OperacionForense
             throw new ExcepcionDeDominio("La evidencia de entrada no pertenece al caso.");
         caso.ExigirOperacion(actor);
         ArgumentNullException.ThrowIfNull(operacion);
-        if (!EsObjetoJson(entorno))
+        if (!Json.EsObjeto(entorno))
             throw new ExcepcionDeDominio(
                 "Toda operación declara el entorno que la ejecutó, como objeto JSON: sin él no es reproducible.");
         Evidencia.ValidarContenido(hashSalida, tamanoSalidaBytes);
@@ -131,18 +131,4 @@ public sealed class OperacionForense
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    private static bool EsObjetoJson(string texto)
-    {
-        if (string.IsNullOrWhiteSpace(texto))
-            return false;
-        try
-        {
-            using var doc = JsonDocument.Parse(texto);
-            return doc.RootElement.ValueKind == JsonValueKind.Object;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
 }
