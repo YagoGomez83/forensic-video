@@ -14,6 +14,12 @@
       <TextBlock Text="{Binding Caso.Descripcion}" TextWrapping="Wrap" />
       <TextBlock x:Name="EstadoDeLaCadena" Text="{Binding EstadoDeLaCadena}" FontWeight="SemiBold"
                  Classes.error="{Binding !CadenaIntegra}" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button x:Name="Ingestar" Content="Ingestar evidencia…" Click="ElegirArchivo" IsEnabled="{Binding !Ingestando}" />
+        <ProgressBar Width="240" Minimum="0" Maximum="1" Value="{Binding Progreso}" IsVisible="{Binding Ingestando}" />
+        <Button Content="Cancelar" Command="{Binding IngestarCancelCommand}" IsVisible="{Binding Ingestando}" />
+      </StackPanel>
+      <TextBlock Classes="aviso" Text="{Binding Aviso}" IsVisible="{Binding Aviso, Converter={x:Static ObjectConverters.IsNotNull}}" />
       <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </StackPanel>
     <Grid ColumnDefinitions="*,8,*" Margin="0,12,0,0">

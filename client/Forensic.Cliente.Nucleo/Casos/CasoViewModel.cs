@@ -5,6 +5,9 @@ using Forensic.Cliente.Api;
 
 namespace Forensic.Cliente.Nucleo.Casos;
 
+/// <summary>Un archivo elegido por el analista para ingestar. Se lee directo, sin copias temporales.</summary>
+public sealed record ArchivoParaIngestar(string Nombre, long TamanoBytes, Func<Task<Stream>> Abrir);
+
 /// <summary>
 /// Un caso: sus evidencias y su cadena de custodia. La integridad de la cadena es el veredicto del
 /// servidor; el cliente no recalcula ningún hash.
@@ -24,6 +27,16 @@ public sealed partial class CasoViewModel(ClienteForense api, INavegacion navega
 
     [ObservableProperty]
     private string? _error;
+
+    [ObservableProperty]
+    private string? _aviso;
+
+    [ObservableProperty]
+    private bool _ingestando;
+
+    /// <summary>De 0 a 1: la parte del archivo que ya salió hacia el servidor.</summary>
+    [ObservableProperty]
+    private double _progreso;
 
     internal ClienteForense Api => api;
     internal INavegacion Navegacion => navegacion;
@@ -54,8 +67,47 @@ public sealed partial class CasoViewModel(ClienteForense api, INavegacion navega
         }
     }
 
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task IngestarAsync(ArchivoParaIngestar archivo, CancellationToken ct)
+    {
+        (Error, Aviso, Progreso, Ingestando) = (null, null, 0, true);
+        var enUi = EnElHiloActual();
+        try
+        {
+            await using var contenido = await archivo.Abrir();
+            await api.IngestarAsync(
+                Caso.Id, archivo.Nombre, contenido, archivo.TamanoBytes,
+                enviados => enUi(() => Progreso = archivo.TamanoBytes == 0 ? 1 : (double)enviados / archivo.TamanoBytes), ct);
+            await CargarAsync(ct);
+            Aviso = $"Evidencia «{archivo.Nombre}» ingestada y custodiada por el servidor.";
+        }
+        catch (OperationCanceledException)
+        {
+            Aviso = "Ingesta cancelada: el servidor no recibió el archivo completo.";
+        }
+        catch (SesionExpiradaException)
+        {
+            // La vuelta al login la hace VentanaViewModel con el evento de la sesión.
+        }
+        catch (ErrorDeApi ex)
+        {
+            Error = Mensajes.Para(ex);
+        }
+        finally
+        {
+            Ingestando = false;
+        }
+    }
+
     [RelayCommand]
     private void Volver() => navegacion.IrACasos();
+
+    /// <summary>El progreso llega desde el hilo que sube; se publica en el de la UI si lo hay.</summary>
+    private static Action<Action> EnElHiloActual()
+    {
+        var contexto = SynchronizationContext.Current;
+        return contexto is null ? accion => accion() : accion => contexto.Post(_ => accion(), null);
+    }
 
     private static void Reemplazar<T>(ObservableCollection<T> destino, IEnumerable<T> origen)
     {

@@ -105,6 +105,23 @@ public sealed class ClienteForense
     public Task<IReadOnlyList<EvidenciaDto>> ListarEvidenciasAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<IReadOnlyList<EvidenciaDto>>(HttpMethod.Get, $"casos/{casoId}/evidencias", null, ct);
 
+    /// <summary>
+    /// Sube una evidencia original en crudo. El servidor la hashea y la custodia; el cliente no
+    /// calcula nada. <paramref name="progreso"/> recibe los bytes enviados hasta el momento.
+    /// </summary>
+    public async Task<EvidenciaDto> IngestarAsync(
+        Guid casoId, string nombre, Stream contenido, long tamanoBytes, Action<long>? progreso, CancellationToken ct)
+    {
+        var cuerpo = new ContenidoConProgreso(contenido, tamanoBytes, progreso);
+        cuerpo.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var peticion = new HttpRequestMessage(HttpMethod.Post, $"casos/{casoId}/evidencias?nombre={Uri.EscapeDataString(nombre)}")
+        {
+            Content = cuerpo,
+        };
+        using var respuesta = await EnviarAsync(peticion, ct);
+        return (await respuesta.Content.ReadFromJsonAsync<EvidenciaDto>(Json, ct))!;
+    }
+
     /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);
