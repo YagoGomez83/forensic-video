@@ -153,6 +153,9 @@ internal static class HttpExtensiones
             $"/casos/{casoId}/evidencias/{evidenciaId}/operaciones",
             new AplicarOperacionRequest(tipo, JsonSerializer.SerializeToElement(parametros), nombre));
 
+    public static Task<HttpResponseMessage> ReproducirAsync(this HttpClient cliente, Guid casoId, Guid evidenciaId) =>
+        cliente.PostAsync($"/casos/{casoId}/evidencias/{evidenciaId}/reproducir", null);
+
     public static async Task<List<EvidenciaDto>> EvidenciasAsync(this HttpClient cliente, Guid casoId) =>
         await (await cliente.GetAsync($"/casos/{casoId}/evidencias")).LeerAsync<List<EvidenciaDto>>();
 

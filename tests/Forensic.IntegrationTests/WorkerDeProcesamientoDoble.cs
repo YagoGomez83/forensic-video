@@ -22,9 +22,13 @@ public sealed class WorkerDeProcesamientoDoble(WorkerDeProcesamientoDoble.Modo m
         DiscrepaSalida,
         Rechaza,
         Caido,
+
+        /// <summary>Otra salida, reportada con su hash correcto: un entorno que ya no reproduce.</summary>
+        Deriva,
     }
 
     public const string Entorno = """{"hilos":1,"opencv":"doble","optimizado":false,"worker":"doble"}""";
+    public const string EntornoDistinto = """{"hilos":1,"opencv":"doble-2","optimizado":false,"worker":"doble"}""";
 
     private int _llamadas;
 
@@ -49,8 +53,12 @@ public sealed class WorkerDeProcesamientoDoble(WorkerDeProcesamientoDoble.Modo m
         }
 
         var salida = SalidaPara(operacion, parametros, bytes);
+        if (modo == Modo.Deriva)
+            salida = [.. salida, 0x42];
         var hashEntrada = HashSha256.Calcular(modo == Modo.DiscrepaEntrada ? [.. bytes, 0xFF] : bytes);
         var hashSalida = HashSha256.Calcular(modo == Modo.DiscrepaSalida ? [.. salida, 0xFF] : salida);
-        return new SalidaDeProcesamiento(new MemoryStream(salida), hashEntrada, hashSalida, "pixeles-" + hashSalida.Hex[..8], Entorno);
+        return new SalidaDeProcesamiento(
+            new MemoryStream(salida), hashEntrada, hashSalida, HashSha256.Calcular([.. salida, 0x01]).Hex,
+            modo == Modo.Deriva ? EntornoDistinto : Entorno);
     }
 }

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Forensic.Application.Evidencias;
 using Forensic.Domain.Casos;
@@ -10,6 +12,13 @@ using Microsoft.Extensions.Logging;
 namespace Forensic.Application.Operaciones;
 
 public sealed record OperacionAplicadaDto(EvidenciaDto Derivado, Guid OperacionId, string Tipo, string Parametros, string Entorno);
+
+/// <param name="Reproducido">El hash de la salida re-ejecutada coincide byte a byte con el asentado.</param>
+/// <param name="EntornoCoincide">El worker actual reporta el mismo entorno que el asentado.</param>
+public sealed record ResultadoDeReproduccion(
+    Guid EvidenciaId, bool Reproducido, bool EntornoCoincide,
+    string Sha256Esperado, string Sha256Obtenido, string? Sha256PixelesEsperado, string Sha256PixelesObtenido,
+    string EntornoAsentado, string EntornoActual);
 
 public sealed class ServicioDeOperaciones(
     IPersistenciaForense persistencia,
@@ -64,6 +73,93 @@ public sealed class ServicioDeOperaciones(
         await persistencia.GuardarCambiosAsync(ct);
         return new OperacionAplicadaDto(
             EvidenciaDto.Desde(derivado, controlCruzadoPendiente: false), operacion.Id, operacion.Tipo, operacion.Parametros, operacion.Entorno);
+    }
+
+    /// <summary>Formato del detalle del asiento <see cref="TipoAsiento.OperacionReproducida"/>.</summary>
+    public const string FormatoDeReproduccion = "forensic-video/reproduccion/v1";
+
+    /// <summary>
+    /// El gate de la Fase 2: re-ejecuta la operación de un derivado usando sólo su asiento
+    /// <see cref="TipoAsiento.OperacionAplicada"/> (tipo, parámetros exactos y entrada) y compara byte a
+    /// byte el hash de la salida. Sólo confía en una cadena que verifica. Lo puede pedir cualquiera con
+    /// lectura del caso, auditor incluido, y queda asentado; no se guarda la salida, que si reproduce es
+    /// idéntica a la custodiada. Que no reproduzca no es un ataque (puede ser otro entorno): se informa
+    /// y se asienta, con LogError. Una divergencia del worker sí es un evento de seguridad.
+    /// </summary>
+    public async Task<ResultadoDeReproduccion> ReproducirAsync(Guid casoId, Guid evidenciaId, CancellationToken ct)
+    {
+        var actor = actorActual.Actor;
+        var caso = await CargarCasoAsync(casoId, ct);
+        caso.ExigirLectura(actor);
+        var derivado = await persistencia.ObtenerEvidenciaAsync(casoId, evidenciaId, ct)
+            ?? throw new NoEncontradoException($"No existe la evidencia {evidenciaId} en el caso.");
+        if (derivado.EsOriginal)
+            throw new ExcepcionDeDominio("Un original no salió de ninguna operación: no hay nada que reproducir.");
+
+        var cadena = await persistencia.ObtenerCadenaAsync(casoId, ct);
+        var verificacion = RegistroDeCustodia.Verificar(casoId, cadena);
+        if (!verificacion.EsIntegra)
+            throw new CadenaComprometidaException(
+                $"La cadena del caso no verifica (asiento {verificacion.SecuenciaRota}: {verificacion.Motivo}); no se reproduce.");
+        var asiento = cadena.SingleOrDefault(a => a.Tipo == TipoAsiento.OperacionAplicada && a.EvidenciaId == derivado.Id)
+            ?? throw new ExcepcionDeDominio($"La evidencia {evidenciaId} no tiene un asiento de operación.");
+        var asentada = OperacionAsentada.Desde(asiento);
+        if (asentada.HashSalida != derivado.Hash)
+            throw new CadenaComprometidaException("El asiento de la operación no corresponde al derivado custodiado.");
+        var padre = await persistencia.ObtenerEvidenciaAsync(casoId, asentada.EvidenciaEntradaId, ct)
+            ?? throw new CadenaComprometidaException("La entrada asentada ya no existe en el caso.");
+        // La operación tiene que seguir en el catálogo; al worker va el string asentado, sin re-serializar.
+        CatalogoDeOperaciones.Interpretar(asentada.Tipo, JsonDocument.Parse(asentada.Parametros).RootElement);
+
+        HashSha256 obtenido;
+        string pixeles, entornoActual;
+        await using (var crudo = await almacen.AbrirVerificadoAsync(asentada.HashEntrada, ct))
+        await using (var salida = await worker.AplicarAsync(asentada.Tipo, asentada.Parametros, crudo, ct))
+        {
+            if (salida.HashEntrada != asentada.HashEntrada)
+                throw Divergencia(casoId, padre, "entrada", asentada.HashEntrada, salida.HashEntrada);
+            obtenido = HashSha256.DesdeBytes(await SHA256.HashDataAsync(salida.Contenido, ct));
+            if (salida.HashSalida != obtenido)
+                throw Divergencia(casoId, padre, "salida", obtenido, salida.HashSalida);
+            (pixeles, entornoActual) = (salida.HashPixeles, salida.Entorno);
+        }
+
+        var resultado = new ResultadoDeReproduccion(
+            derivado.Id, obtenido == asentada.HashSalida, entornoActual == asentada.Entorno,
+            asentada.HashSalida.Hex, obtenido.Hex, asentada.HashPixelesSalida, pixeles, asentada.Entorno, entornoActual);
+        if (!resultado.Reproducido)
+            logger.LogError(
+                "La operación del derivado {EvidenciaId} (caso {CasoId}) no reproduce: esperado {Esperado}, obtenido {Obtenido}. " +
+                "Entorno coincide: {EntornoCoincide}.",
+                derivado.Id, casoId, resultado.Sha256Esperado, resultado.Sha256Obtenido, resultado.EntornoCoincide);
+
+        var ultimo = await persistencia.ObtenerUltimoAsientoAsync(casoId, ct);
+        persistencia.Agregar(RegistroDeCustodia.Asentar(
+            ultimo, casoId, TipoAsiento.OperacionReproducida, derivado.Id,
+            DetalleDeReproduccion(asiento.Secuencia, resultado), actor, reloj.GetUtcNow()));
+        await persistencia.GuardarCambiosAsync(ct);
+        return resultado;
+    }
+
+    private static string DetalleDeReproduccion(long secuenciaDeLaOperacion, ResultadoDeReproduccion r)
+    {
+        using var buffer = new MemoryStream();
+        using (var w = new Utf8JsonWriter(buffer))
+        {
+            w.WriteStartObject();
+            w.WriteString("formato", FormatoDeReproduccion);
+            w.WriteNumber("asientoDeLaOperacion", secuenciaDeLaOperacion);
+            w.WriteBoolean("reproducido", r.Reproducido);
+            w.WriteBoolean("entornoCoincide", r.EntornoCoincide);
+            w.WriteString("sha256Esperado", r.Sha256Esperado);
+            w.WriteString("sha256Obtenido", r.Sha256Obtenido);
+            w.WriteString("sha256PixelesEsperado", r.Sha256PixelesEsperado);
+            w.WriteString("sha256PixelesObtenido", r.Sha256PixelesObtenido);
+            w.WritePropertyName("entorno");
+            w.WriteRawValue(r.EntornoActual);
+            w.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     /// <summary><c>cam1.png</c> + <c>opencv.recorte/v1</c> → <c>cam1-recorte.png</c>. Es metadato, nunca una ruta.</summary>

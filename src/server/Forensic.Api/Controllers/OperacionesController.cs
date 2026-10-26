@@ -18,4 +18,12 @@ public sealed class OperacionesController(ServicioDeOperaciones operaciones) : C
         var aplicada = await operaciones.AplicarAsync(casoId, evidenciaId, req.Tipo, req.Parametros, req.Nombre, ct);
         return Created($"/casos/{casoId}/evidencias/{aplicada.Derivado.Id}", aplicada);
     }
+
+    /// <summary>
+    /// Re-ejecuta la operación de un derivado desde su asiento y compara el hash byte a byte. Queda
+    /// asentado. Lo puede pedir cualquiera con lectura del caso.
+    /// </summary>
+    [HttpPost("reproducir")]
+    public Task<ResultadoDeReproduccion> Reproducir(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        operaciones.ReproducirAsync(casoId, evidenciaId, ct);
 }

@@ -40,6 +40,12 @@ public sealed class CredencialesInvalidasException(Exception? interna = null)
 public sealed class ConflictoDeIdentidadException(string mensaje, Exception? interna = null)
     : Exception(mensaje, interna);
 
+/// <summary>
+/// La cadena de custodia del caso no verifica: nada que dependa de sus asientos (como reproducir una
+/// operación) puede confiar en ella.
+/// </summary>
+public sealed class CadenaComprometidaException(string mensaje) : Exception(mensaje);
+
 /// <summary>El worker de procesamiento rechazó el contenido o los parámetros (su API respondió 422).</summary>
 public sealed class ProcesamientoRechazadoException(string mensaje) : Exception(mensaje);
 
