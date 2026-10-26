@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeRotacionVista"
+             x:DataType="op:FormularioDeRotacion">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <TextBlock Text="Grados (positivo = antihorario):" VerticalAlignment="Center" />
+    <NumericUpDown Width="150" Increment="0.5" FormatString="0.##" Value="{Binding Grados}" />
+    <TextBlock Text="Interpolación:" VerticalAlignment="Center" />
+    <ComboBox ItemsSource="{x:Static op:Interpolaciones.Todas}" SelectedItem="{Binding Interpolacion}" />
+  </StackPanel>
+</UserControl>

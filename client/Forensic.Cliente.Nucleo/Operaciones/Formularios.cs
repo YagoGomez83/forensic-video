@@ -54,3 +54,36 @@ public sealed partial class FormularioDePerspectiva : FormularioDeOperacion
         };
     }
 }
+
+/// <summary>Rotación exacta en cuartos de vuelta, en sentido horario.</summary>
+public sealed partial class FormularioDeRotacion90 : FormularioDeOperacion
+{
+    public static IReadOnlyList<int> OpcionesDeGiros { get; } = [1, 2, 3];
+
+    [ObservableProperty]
+    private int _giros = 1;
+
+    public override string Tipo => "opencv.rotacion90/v1";
+    public override string Titulo => "Rotación exacta (90°, 180°, 270°)";
+
+    public override object Parametros(MarcasDelVisor marcas) => new { giros = Giros };
+}
+
+/// <summary>
+/// Rotación por ángulo alrededor del centro, en grados con hasta dos decimales (el servidor los recibe
+/// en centésimas). Positivo = antihorario, como en OpenCV.
+/// </summary>
+public sealed partial class FormularioDeRotacion : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _grados;
+
+    [ObservableProperty]
+    private string _interpolacion = "lineal";
+
+    public override string Tipo => "opencv.rotacion/v1";
+    public override string Titulo => "Rotación por ángulo";
+
+    public override object Parametros(MarcasDelVisor marcas) =>
+        new { centesimasDeGrado = PuntoFijo.AEntero(Grados, 2, "el ángulo"), interpolacion = Interpolacion };
+}

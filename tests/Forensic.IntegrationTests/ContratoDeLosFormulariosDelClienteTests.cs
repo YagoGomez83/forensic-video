@@ -18,12 +18,16 @@ public class ContratoDeLosFormulariosDelClienteTests(ServidorForense servidor) :
     {
         { nameof(FormularioDeRecorte), """{"alto":9,"ancho":16,"x":5,"y":6}""" },
         { nameof(FormularioDePerspectiva), """{"alto":30,"ancho":40,"interpolacion":"cubica","x1":3,"x2":60,"x3":62,"x4":1,"y1":2,"y2":4,"y3":45,"y4":44}""" },
+        { nameof(FormularioDeRotacion90), """{"giros":2}""" },
+        { nameof(FormularioDeRotacion), """{"centesimasDeGrado":-1250,"interpolacion":"lineal"}""" },
     };
 
     private static (FormularioDeOperacion Formulario, MarcasDelVisor Marcas) Armar(string nombre) => nombre switch
     {
         nameof(FormularioDeRecorte) => (new FormularioDeRecorte(), new(new(5, 6, 16, 9), [])),
         nameof(FormularioDePerspectiva) => (new FormularioDePerspectiva { Ancho = 40, Alto = 30, Interpolacion = "cubica" }, new(null, Esquinas)),
+        nameof(FormularioDeRotacion90) => (new FormularioDeRotacion90 { Giros = 2 }, new(null, [])),
+        nameof(FormularioDeRotacion) => (new FormularioDeRotacion { Grados = -12.5m }, new(null, [])),
         _ => throw new ArgumentOutOfRangeException(nameof(nombre), nombre, null),
     };
 

@@ -113,4 +113,28 @@ public class FormulariosTests
         vm.FormularioElegido = vm.Formularios.OfType<T>().Single();
         return (vm, servidor);
     }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void La_rotacion_exacta_envia_los_cuartos_de_vuelta(int giros)
+    {
+        Assert.Equal($"{{\"giros\":{giros}}}", Json(new FormularioDeRotacion90 { Giros = giros }.Parametros(SinMarcas)));
+    }
+
+    [Fact]
+    public void La_rotacion_por_angulo_convierte_los_grados_a_centesimas_exactas()
+    {
+        var f = new FormularioDeRotacion { Grados = -12.5m, Interpolacion = "cubica" };
+
+        Assert.Equal("""{"centesimasDeGrado":-1250,"interpolacion":"cubica"}""", Json(f.Parametros(SinMarcas)));
+    }
+
+    [Fact]
+    public void La_rotacion_por_angulo_no_redondea_mas_de_dos_decimales()
+    {
+        var ex = Assert.Throws<ErrorDeFormulario>(() => new FormularioDeRotacion { Grados = 12.555m }.Parametros(SinMarcas));
+
+        Assert.Contains("2 decimales", ex.Message);
+    }
 }

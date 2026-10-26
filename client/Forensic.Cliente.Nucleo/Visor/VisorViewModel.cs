@@ -34,6 +34,8 @@ public sealed partial class VisorViewModel(
     [
         new FormularioDeRecorte(),
         new FormularioDePerspectiva(),
+        new FormularioDeRotacion90(),
+        new FormularioDeRotacion(),
     ];
 
     [ObservableProperty]
