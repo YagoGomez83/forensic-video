@@ -169,6 +169,132 @@ namespace Forensic.Infrastructure.Persistencia.Migraciones
                     b.ToTable("Evidencias", (string)null);
                 });
 
+            modelBuilder.Entity("Forensic.Domain.Ia.AnalisisIa", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("CasoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Entorno")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("EvidenciaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HashEntrada")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Parametros")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("RegistradoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.ComplexProperty<Dictionary<string, object>>("Modelo", "Forensic.Domain.Ia.AnalisisIa.Modelo#ModeloDeIa", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Id")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("ModeloId");
+
+                            b1.Property<string>("Sha256")
+                                .IsRequired()
+                                .HasMaxLength(64)
+                                .HasColumnType("character(64)")
+                                .HasColumnName("ModeloSha256")
+                                .IsFixedLength();
+
+                            b1.Property<string>("Version")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("ModeloVersion");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidenciaId");
+
+                    b.HasIndex("CasoId", "EvidenciaId");
+
+                    b.ToTable("AnalisisIa", (string)null);
+                });
+
+            modelBuilder.Entity("Forensic.Domain.Ia.Hallazgo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AnalisisId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Clase")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("Confianza")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("DatoCrudo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TextoLeido")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.ComplexProperty<Dictionary<string, object>>("Region", "Forensic.Domain.Ia.Hallazgo.Region#RegionDeImagen", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<int>("Alto")
+                                .HasColumnType("integer")
+                                .HasColumnName("RegionAlto");
+
+                            b1.Property<int>("Ancho")
+                                .HasColumnType("integer")
+                                .HasColumnName("RegionAncho");
+
+                            b1.Property<int>("X")
+                                .HasColumnType("integer")
+                                .HasColumnName("RegionX");
+
+                            b1.Property<int>("Y")
+                                .HasColumnType("integer")
+                                .HasColumnName("RegionY");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalisisId", "Orden")
+                        .IsUnique();
+
+                    b.ToTable("HallazgosIa", (string)null);
+                });
+
             modelBuilder.Entity("Forensic.Domain.Operaciones.OperacionForense", b =>
                 {
                     b.Property<Guid>("Id")
@@ -262,6 +388,30 @@ namespace Forensic.Infrastructure.Persistencia.Migraciones
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("Forensic.Domain.Ia.AnalisisIa", b =>
+                {
+                    b.HasOne("Forensic.Domain.Casos.Caso", null)
+                        .WithMany()
+                        .HasForeignKey("CasoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Forensic.Domain.Evidencias.Evidencia", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenciaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Forensic.Domain.Ia.Hallazgo", b =>
+                {
+                    b.HasOne("Forensic.Domain.Ia.AnalisisIa", null)
+                        .WithMany("Hallazgos")
+                        .HasForeignKey("AnalisisId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Forensic.Domain.Operaciones.OperacionForense", b =>
                 {
                     b.HasOne("Forensic.Domain.Casos.Caso", null)
@@ -275,6 +425,11 @@ namespace Forensic.Infrastructure.Persistencia.Migraciones
                         .HasForeignKey("EvidenciaEntradaId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Forensic.Domain.Ia.AnalisisIa", b =>
+                {
+                    b.Navigation("Hallazgos");
                 });
 #pragma warning restore 612, 618
         }

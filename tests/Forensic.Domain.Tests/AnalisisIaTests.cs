@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
+using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
 using Forensic.Domain.Ia;
 using Forensic.Domain.Operaciones;
@@ -242,6 +243,73 @@ public class AnalisisIaTests
         var usaIa = typeof(OperacionDeIa).GetProperty(nameof(OperacionDeIa.UsaIa))!.GetMethod!;
 
         Assert.True(usaIa.IsFinal);
+    }
+
+    [Fact]
+    public void El_asiento_lleva_la_procedencia_completa_y_cada_hallazgo_con_su_dato_crudo_exacto()
+    {
+        var original = Original(_caso);
+        var leido = HallazgoPropuesto.Texto(RegionDeImagen.Crear(1, 2, 3, 4), "ABC123", 0.82m, """{"texto": "ABC123"}""");
+        var analisis = Registrar(original, [Auto(), leido]);
+
+        var detalle = analisis.DetalleDeAsiento();
+
+        using var doc = JsonDocument.Parse(detalle);
+        var r = doc.RootElement;
+        Assert.Equal(AnalisisIa.FormatoDeDetalle, r.GetProperty("formato").GetString());
+        Assert.Equal("forensic-video/hallazgos-ia/v1", AnalisisIa.FormatoDeDetalle);
+        Assert.Equal(analisis.Id, r.GetProperty("analisisId").GetGuid());
+        Assert.Equal(CatalogoDeIa.Deteccion, r.GetProperty("analisis").GetString());
+        Assert.Equal("""{"umbralConfianzaMilesimas":500}""", r.GetProperty("parametros").GetRawText());
+        var modelo = r.GetProperty("modelo");
+        Assert.Equal("yolox-s", modelo.GetProperty("id").GetString());
+        Assert.Equal("0.1.1rc0", modelo.GetProperty("version").GetString());
+        Assert.Equal(Yolox.Sha256.Hex, modelo.GetProperty("sha256").GetString());
+        Assert.Equal(original.Id, r.GetProperty("entrada").GetProperty("evidenciaId").GetGuid());
+        Assert.Equal(original.Hash.Hex, r.GetProperty("entrada").GetProperty("sha256").GetString());
+        // Lo que el servidor no puede verificar queda dicho como tal.
+        var procedencia = r.GetProperty("procedencia");
+        Assert.Equal("declarada-por-workstation", procedencia.GetProperty("origen").GetString());
+        Assert.Equal(EntornoDeGpu, procedencia.GetProperty("entorno").GetRawText());
+        Assert.Equal("SoloInvestigacion", r.GetProperty("via").GetString());
+
+        var hallazgos = r.GetProperty("hallazgos").EnumerateArray().ToList();
+        Assert.Equal(2, hallazgos.Count);
+        Assert.Equal("car", hallazgos[0].GetProperty("clase").GetString());
+        Assert.False(hallazgos[0].TryGetProperty("textoLeido", out _));
+        Assert.Equal("0.8213", hallazgos[0].GetProperty("confianza").GetRawText());
+        Assert.Equal(Crudo, hallazgos[0].GetProperty("crudo").GetRawText());
+        Assert.Equal("ABC123", hallazgos[1].GetProperty("textoLeido").GetString());
+        Assert.False(hallazgos[1].TryGetProperty("clase", out _));
+        Assert.Equal("""{"texto": "ABC123"}""", hallazgos[1].GetProperty("crudo").GetRawText());
+        var region = hallazgos[1].GetProperty("region");
+        Assert.Equal((1, 2, 3, 4), (region.GetProperty("x").GetInt32(), region.GetProperty("y").GetInt32(),
+            region.GetProperty("ancho").GetInt32(), region.GetProperty("alto").GetInt32()));
+    }
+
+    [Fact]
+    public void Un_analisis_sin_hallazgos_tambien_se_asienta()
+    {
+        var detalle = Registrar(Original(_caso), []).DetalleDeAsiento();
+
+        using var doc = JsonDocument.Parse(detalle);
+        Assert.Equal(0, doc.RootElement.GetProperty("hallazgos").GetArrayLength());
+    }
+
+    [Fact]
+    public void El_asiento_de_hallazgos_se_encadena_en_la_custodia_del_caso()
+    {
+        var original = Original(_caso);
+        var ingesta = RegistroDeCustodia.Asentar(
+            null, _caso.Id, TipoAsiento.EvidenciaIngestada, original.Id, "{}", Ana, Ahora);
+        var analisis = Registrar(original);
+
+        var asiento = RegistroDeCustodia.Asentar(
+            ingesta, _caso.Id, TipoAsiento.HallazgosRegistrados, original.Id, analisis.DetalleDeAsiento(), Ana,
+            analisis.RegistradoEn);
+
+        Assert.Equal(ingesta.Hash, asiento.HashAnterior);
+        Assert.True(RegistroDeCustodia.Verificar(_caso.Id, [ingesta, asiento]).EsIntegra);
     }
 
     private sealed class OperacionDeIaDePrueba : OperacionDeIa

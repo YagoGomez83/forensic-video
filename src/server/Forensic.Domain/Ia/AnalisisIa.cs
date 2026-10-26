@@ -1,5 +1,8 @@
+using System.Text;
+using System.Text.Json;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
+using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
 
 namespace Forensic.Domain.Ia;
@@ -11,6 +14,15 @@ namespace Forensic.Domain.Ia;
 /// </summary>
 public sealed class AnalisisIa
 {
+    /// <summary>
+    /// Formato del detalle de su asiento <see cref="TipoAsiento.HallazgosRegistrados"/>. Cambiar su
+    /// estructura exige una versión nueva.
+    /// </summary>
+    public const string FormatoDeDetalle = "forensic-video/hallazgos-ia/v1";
+
+    /// <summary>Lo que el servidor no puede verificar (entorno, ejecución) está declarado por la workstation.</summary>
+    public const string OrigenDeLaProcedencia = "declarada-por-workstation";
+
     private readonly List<Hallazgo> _hallazgos = [];
 
     private AnalisisIa()
@@ -80,5 +92,62 @@ public sealed class AnalisisIa
         };
         analisis._hallazgos.AddRange(hallazgos.Select((h, i) => Hallazgo.Desde(analisis.Id, i, h)));
         return analisis;
+    }
+
+    /// <summary>
+    /// Detalle del asiento <see cref="TipoAsiento.HallazgosRegistrados"/>, en <see cref="FormatoDeDetalle"/>:
+    /// la procedencia completa y cada hallazgo con su confianza y su dato crudo, byte a byte como los
+    /// reportó el worker. El asiento solo alcanza para saber qué dijo el modelo y con qué se obtuvo.
+    /// </summary>
+    public string DetalleDeAsiento()
+    {
+        using var buffer = new MemoryStream();
+        using (var w = new Utf8JsonWriter(buffer))
+        {
+            w.WriteStartObject();
+            w.WriteString("formato", FormatoDeDetalle);
+            w.WriteString("analisisId", Id);
+            w.WriteString("analisis", Tipo);
+            w.WritePropertyName("parametros");
+            w.WriteRawValue(Parametros);
+            w.WriteStartObject("modelo");
+            w.WriteString("id", Modelo.Id);
+            w.WriteString("version", Modelo.Version);
+            w.WriteString("sha256", Modelo.Sha256.Hex);
+            w.WriteEndObject();
+            w.WriteStartObject("entrada");
+            w.WriteString("evidenciaId", EvidenciaId);
+            w.WriteString("sha256", HashEntrada.Hex);
+            w.WriteEndObject();
+            w.WriteStartObject("procedencia");
+            w.WriteString("origen", OrigenDeLaProcedencia);
+            w.WritePropertyName("entorno");
+            w.WriteRawValue(Entorno);
+            w.WriteEndObject();
+            w.WriteStartArray("hallazgos");
+            foreach (var h in _hallazgos)
+            {
+                w.WriteStartObject();
+                w.WriteNumber("orden", h.Orden);
+                w.WriteStartObject("region");
+                w.WriteNumber("x", h.Region.X);
+                w.WriteNumber("y", h.Region.Y);
+                w.WriteNumber("ancho", h.Region.Ancho);
+                w.WriteNumber("alto", h.Region.Alto);
+                w.WriteEndObject();
+                if (h.Clase is not null)
+                    w.WriteString("clase", h.Clase);
+                if (h.TextoLeido is not null)
+                    w.WriteString("textoLeido", h.TextoLeido);
+                w.WriteNumber("confianza", h.Confianza);
+                w.WritePropertyName("crudo");
+                w.WriteRawValue(h.DatoCrudo);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+            w.WriteString("via", Via.ToString());
+            w.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 }

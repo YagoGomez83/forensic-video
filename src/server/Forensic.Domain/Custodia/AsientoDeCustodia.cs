@@ -14,6 +14,7 @@ public enum TipoAsiento
     ControlCruzadoCompletado = 6,
     OperacionAplicada = 7,
     OperacionReproducida = 8,
+    HallazgosRegistrados = 9,
 }
 
 /// <summary>

@@ -3,6 +3,7 @@ using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
+using Forensic.Domain.Ia;
 using Forensic.Domain.Operaciones;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -35,10 +36,18 @@ internal sealed class PersistenciaForense(ContextoForense db) : IPersistenciaFor
             .OrderBy(a => a.Secuencia)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<AnalisisIa>> ListarAnalisisIaAsync(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        await db.AnalisisIa.AsNoTracking()
+            .Include(a => a.Hallazgos.OrderBy(h => h.Orden))
+            .Where(a => a.CasoId == casoId && a.EvidenciaId == evidenciaId)
+            .OrderBy(a => a.RegistradoEn)
+            .ToListAsync(ct);
+
     public void Agregar(Caso caso) => db.Casos.Add(caso);
     public void Agregar(Evidencia evidencia) => db.Evidencias.Add(evidencia);
     public void Agregar(AsientoDeCustodia asiento) => db.AsientosDeCustodia.Add(asiento);
     public void Agregar(OperacionForense operacion) => db.OperacionesForenses.Add(operacion);
+    public void Agregar(AnalisisIa analisis) => db.AnalisisIa.Add(analisis);
 
     public async Task GuardarCambiosAsync(CancellationToken ct)
     {
