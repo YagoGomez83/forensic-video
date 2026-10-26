@@ -5,6 +5,9 @@ using Forensic.Cliente.Nucleo.Operaciones;
 
 namespace Forensic.Cliente.Nucleo.Visor;
 
+/// <summary>El archivo donde el analista eligió guardar la evidencia. Se abre sólo si el servidor la entrega.</summary>
+public sealed record DestinoDeDescarga(string Nombre, Func<Task<Stream>> Abrir);
+
 /// <summary>
 /// Muestra una evidencia tal como la entrega el servidor (verificada y asentada como acceso). El
 /// contenido queda en memoria. La vista decodifica sólo para mostrar e informa las dimensiones; la
@@ -75,6 +78,9 @@ public sealed partial class VisorViewModel(
 
     [ObservableProperty]
     private string? _error;
+
+    [ObservableProperty]
+    private string? _aviso;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FormulariosDisponibles))]
@@ -199,6 +205,29 @@ public sealed partial class VisorViewModel(
         finally
         {
             Aplicando = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DescargarAsync(DestinoDeDescarga destino, CancellationToken ct)
+    {
+        (Error, Aviso) = (null, null);
+        try
+        {
+            await api.DescargarAAsync(Evidencia.CasoId, Evidencia.Id, destino.Abrir, ct);
+            Aviso = $"Descargada en «{destino.Nombre}». El servidor verificó su SHA-256 {Evidencia.Hash} antes de entregarla.";
+        }
+        catch (OperationCanceledException)
+        {
+            Aviso = "Descarga cancelada.";
+        }
+        catch (SesionExpiradaException)
+        {
+            // La vuelta al login la hace VentanaViewModel con el evento de la sesión.
+        }
+        catch (ErrorDeApi ex)
+        {
+            Error = Mensajes.Para(ex);
         }
     }
 

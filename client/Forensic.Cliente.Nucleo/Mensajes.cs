@@ -13,6 +13,7 @@ public static class Mensajes
         TipoDeError.DivergenciaDeSeguridad =>
             $"ALERTA DE SEGURIDAD: el servidor detectó una divergencia con el worker y no aceptó el resultado. {error.Message}",
         TipoDeError.WorkerNoDisponible => $"El servicio de procesamiento no está disponible. {error.Message}",
+        TipoDeError.DemasiadosIntentos => "Demasiados intentos desde esta computadora: esperá un minuto y volvé a probar.",
         _ => error.Message,
     };
 }

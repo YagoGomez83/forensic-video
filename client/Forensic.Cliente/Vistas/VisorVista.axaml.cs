@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform.Storage;
 using Forensic.Cliente.Nucleo.Visor;
 
 namespace Forensic.Cliente.Vistas;
@@ -62,6 +63,21 @@ public partial class VisorVista : UserControl
             _vm.NoDecodificable();
         }
         AjustarSiHaceFalta();
+    }
+
+    /// <summary>El diálogo de guardado es del sistema operativo; la descarga la hace el ViewModel.</summary>
+    private async void ElegirDestino(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is not { } vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } almacen)
+            return;
+        var archivo = await almacen.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Guardar la evidencia",
+            SuggestedFileName = vm.Evidencia.NombreOriginal,
+        });
+        if (archivo is null)
+            return;
+        await vm.DescargarCommand.ExecuteAsync(new DestinoDeDescarga(archivo.Name, archivo.OpenWriteAsync));
     }
 
     private void AjustarSiHaceFalta()

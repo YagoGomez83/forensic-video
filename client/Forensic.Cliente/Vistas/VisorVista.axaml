@@ -10,6 +10,7 @@
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Content="← Caso" Command="{Binding VolverCommand}" />
         <Button Content="Linaje y reproducción" Command="{Binding VerLinajeCommand}" />
+        <Button Content="Descargar…" Click="ElegirDestino" />
         <TextBlock Text="{Binding Evidencia.NombreOriginal}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
         <TextBlock Text="{Binding Evidencia.Via}" VerticalAlignment="Center" Opacity="0.8" />
         <TextBlock Text="{Binding Transformacion.Zoom, StringFormat='Zoom {0:P0}'}" VerticalAlignment="Center" Opacity="0.7" />
@@ -38,6 +39,7 @@
       </StackPanel>
       <ContentControl Content="{Binding FormularioElegido}" />
       <TextBlock Classes="aviso" Text="{Binding SinPrevisualizacion}" IsVisible="{Binding SinPrevisualizacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Classes="aviso" Text="{Binding Aviso}" IsVisible="{Binding Aviso, Converter={x:Static ObjectConverters.IsNotNull}}" />
       <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </StackPanel>
     <Border Background="#202020">

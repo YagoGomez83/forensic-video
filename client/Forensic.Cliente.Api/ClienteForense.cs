@@ -150,6 +150,20 @@ public sealed class ClienteForense
     public Task<ResultadoDeReproduccion> ReproducirAsync(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
         EnviarAsync<ResultadoDeReproduccion>(HttpMethod.Post, $"casos/{casoId}/evidencias/{evidenciaId}/reproducir", null, ct);
 
+    /// <summary>
+    /// Descarga en streaming al destino que eligió el analista, sin pasar por memoria ni temporales. El
+    /// destino se abre recién cuando el servidor respondió OK (verificó el hash y asentó el acceso): un
+    /// rechazo no deja un archivo vacío.
+    /// </summary>
+    public async Task DescargarAAsync(Guid casoId, Guid evidenciaId, Func<Task<Stream>> abrirDestino, CancellationToken ct)
+    {
+        using var peticion = new HttpRequestMessage(HttpMethod.Get, $"casos/{casoId}/evidencias/{evidenciaId}/contenido");
+        using var respuesta = await EnviarAsync(peticion, ct, HttpCompletionOption.ResponseHeadersRead);
+        await using var origen = await respuesta.Content.ReadAsStreamAsync(ct);
+        await using var destino = await abrirDestino();
+        await origen.CopyToAsync(destino, ct);
+    }
+
     /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);
