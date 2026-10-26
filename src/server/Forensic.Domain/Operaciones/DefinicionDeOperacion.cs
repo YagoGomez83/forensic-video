@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Forensic.Domain.Comun;
 
 namespace Forensic.Domain.Operaciones;
@@ -10,6 +10,14 @@ namespace Forensic.Domain.Operaciones;
 /// </summary>
 public abstract class DefinicionDeOperacion
 {
+    /// <summary>
+    /// Sólo <see cref="OperacionDeterminista"/> y <see cref="OperacionDeIa"/>, del dominio: no hay una
+    /// tercera vía, ni una operación «de IA» fabricada fuera que se declare de otro modo.
+    /// </summary>
+    private protected DefinicionDeOperacion()
+    {
+    }
+
     public abstract string Tipo { get; }
 
     /// <summary>Si es cierto, el derivado sale de la vía judicial (doble vía).</summary>
@@ -21,6 +29,10 @@ public abstract class DefinicionDeOperacion
 /// <summary>Operación clásica y determinista (OpenCV): el derivado sigue admisible en juicio.</summary>
 public abstract class OperacionDeterminista : DefinicionDeOperacion
 {
+    private protected OperacionDeterminista()
+    {
+    }
+
     public sealed override bool UsaIa => false;
 
     /// <summary>JSON con las claves ordenadas y sin espacios. Sólo enteros y strings: ningún float ambiguo.</summary>
@@ -33,6 +45,10 @@ public abstract class OperacionDeterminista : DefinicionDeOperacion
 /// </summary>
 public abstract class OperacionDeIa : DefinicionDeOperacion
 {
+    private protected OperacionDeIa()
+    {
+    }
+
     public sealed override bool UsaIa => true;
 }
 

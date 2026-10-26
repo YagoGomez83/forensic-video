@@ -48,9 +48,10 @@ public sealed record ExportDeCustodia(
 /// <param name="Parametros">Los parámetros canónicos tal como quedaron asentados en el servidor.</param>
 public sealed record OperacionAplicadaDto(EvidenciaDto Derivado, Guid OperacionId, string Tipo, string Parametros, string Entorno);
 
+/// <param name="Modelo">El modelo, si la operación es de IA: procedencia, no reproducción.</param>
 public sealed record OperacionDelLinaje(
     long Secuencia, string Tipo, string Parametros, Guid EvidenciaEntradaId, string Entorno, ViaProcesamiento Via,
-    string Actor, DateTimeOffset Timestamp);
+    string Actor, DateTimeOffset Timestamp, ModeloDeIaDto? Modelo = null);
 
 public sealed record ReproduccionDelLinaje(long Secuencia, bool Reproducido, bool EntornoCoincide, string Actor, DateTimeOffset Timestamp);
 

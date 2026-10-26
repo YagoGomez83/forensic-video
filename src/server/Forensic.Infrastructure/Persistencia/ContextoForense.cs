@@ -1,4 +1,4 @@
-using Forensic.Domain.Casos;
+﻿using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
@@ -70,6 +70,11 @@ public sealed class ContextoForense(DbContextOptions<ContextoForense> options) :
             b.Property(o => o.HashSalida).HasConversion(ConversorHash).HasMaxLength(HashSha256.LongitudHex).IsFixedLength();
             b.Property(o => o.HashPixelesSalida).HasMaxLength(HashSha256.LongitudHex);
             b.Property(o => o.Actor).HasMaxLength(100).IsRequired();
+            // Modelo de una operación de IA; null en una determinista (CHECK en la migración OperacionesIa).
+            b.Property(o => o.ModeloId).HasMaxLength(100);
+            b.Property(o => o.ModeloVersion).HasMaxLength(50);
+            b.Property(o => o.ModeloSha256).HasConversion(ConversorHash).HasMaxLength(HashSha256.LongitudHex).IsFixedLength();
+            b.Ignore(o => o.Modelo);
         });
 
         // La columna "Via" de AnalisisIa y HallazgosIa no está en el modelo: la vía es una constante del

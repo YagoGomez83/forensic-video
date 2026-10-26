@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using Forensic.Domain.Comun;
 
@@ -15,6 +15,7 @@ public enum TipoAsiento
     OperacionAplicada = 7,
     OperacionReproducida = 8,
     HallazgosRegistrados = 9,
+    OperacionIaAplicada = 10,
 }
 
 /// <summary>

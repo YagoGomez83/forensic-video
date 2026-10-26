@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
@@ -233,8 +233,8 @@ public class AnalisisIaTests
     public void Analizar_un_derivado_de_ia_tambien_es_solo_investigacion()
     {
         var original = Original(_caso);
-        var superRes = OperacionForense.Registrar(
-            _caso, original, new OperacionDeIaDePrueba(), EntornoDeGpu, HashDe("sr"), 4096, null, Ana, Ahora.AddMinutes(1));
+        var superRes = OperacionForense.RegistrarIa(
+            _caso, original, SuperRes(), RealEsrgan, EntornoDeGpu, HashDe("sr"), 4096, Ana, Ahora.AddMinutes(1));
         var derivado = original.Derivar(superRes, "sr.png");
 
         var analisis = Registrar(derivado);
@@ -247,8 +247,8 @@ public class AnalisisIaTests
     public void Una_operacion_de_ia_siempre_saca_al_derivado_de_la_via_judicial()
     {
         var original = Original(_caso);
-        var op = OperacionForense.Registrar(
-            _caso, original, new OperacionDeIaDePrueba(), EntornoDeGpu, HashDe("sr"), 4096, null, Ana, Ahora.AddMinutes(1));
+        var op = OperacionForense.RegistrarIa(
+            _caso, original, SuperRes(), RealEsrgan, EntornoDeGpu, HashDe("sr"), 4096, Ana, Ahora.AddMinutes(1));
 
         var derivado = original.Derivar(op, "sr.png");
         var nieto = derivado.Derivar(
@@ -256,7 +256,7 @@ public class AnalisisIaTests
                 null, Ana, Ahora.AddMinutes(2)),
             "sr-recorte.png");
 
-        Assert.True(new OperacionDeIaDePrueba().UsaIa);
+        Assert.True(SuperRes().UsaIa);
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, op.Via);
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, nieto.Via);
         Assert.Throws<ExcepcionDeDominio>(nieto.ExigirAdmisibleEnJuicio);
@@ -338,9 +338,6 @@ public class AnalisisIaTests
         Assert.True(RegistroDeCustodia.Verificar(_caso.Id, [ingesta, asiento]).EsIntegra);
     }
 
-    private sealed class OperacionDeIaDePrueba : OperacionDeIa
-    {
-        public override string Tipo => "ia.prueba/v1";
-        public override string ParametrosCanonicos => "{}";
-    }
+    private static OperacionDeIa SuperRes() =>
+        CatalogoDeIa.InterpretarOperacion(CatalogoDeIa.SuperResolucion, Json("{}"));
 }

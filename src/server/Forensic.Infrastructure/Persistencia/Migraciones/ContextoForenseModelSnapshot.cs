@@ -331,6 +331,19 @@ namespace Forensic.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character(64)")
                         .IsFixedLength();
 
+                    b.Property<string>("ModeloId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ModeloSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("ModeloVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Parametros")
                         .IsRequired()
                         .HasColumnType("text");
