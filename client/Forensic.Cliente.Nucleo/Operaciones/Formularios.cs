@@ -164,3 +164,43 @@ public sealed partial class FormularioDeClahe : FormularioDeOperacion
         cuadricula = Entero(Cuadricula, "la cuadrícula"),
     };
 }
+
+/// <summary>Brillo y contraste lineales: contraste con hasta dos decimales y brillo entero.</summary>
+public sealed partial class FormularioDeBrilloContraste : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _contraste = 1.0m;
+
+    [ObservableProperty]
+    private decimal? _brillo = 0;
+
+    public override string Tipo => "opencv.tonal.brillo-contraste/v1";
+    public override string Titulo => "Brillo y contraste";
+
+    public override object Parametros(MarcasDelVisor marcas) => new
+    {
+        contrasteCentesimas = PuntoFijo.AEntero(Contraste, 2, "el contraste"),
+        brillo = Entero(Brillo, "el brillo"),
+    };
+}
+
+/// <summary>Corrección gamma con hasta tres decimales (γ &gt; 1 aclara).</summary>
+public sealed partial class FormularioDeGamma : FormularioDeOperacion
+{
+    [ObservableProperty]
+    private decimal? _gamma = 1.0m;
+
+    public override string Tipo => "opencv.tonal.gamma/v1";
+    public override string Titulo => "Gamma";
+
+    public override object Parametros(MarcasDelVisor marcas) => new { gammaMilesimas = PuntoFijo.AEntero(Gamma, 3, "la gamma") };
+}
+
+/// <summary>Ecualización del histograma (en color, sobre la luminancia). Sin parámetros.</summary>
+public sealed class FormularioDeEcualizacion : FormularioDeOperacion
+{
+    public override string Tipo => "opencv.tonal.ecualizacion/v1";
+    public override string Titulo => "Ecualización del histograma";
+
+    public override object Parametros(MarcasDelVisor marcas) => new { };
+}

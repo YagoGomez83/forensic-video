@@ -170,4 +170,25 @@ public class FormulariosTests
         Assert.Equal("""{"limiteDecimas":25,"cuadricula":8}""", Json(f.Parametros(SinMarcas)));
         Assert.Throws<ErrorDeFormulario>(() => new FormularioDeClahe { Limite = 2.55m, Cuadricula = 8 }.Parametros(SinMarcas));
     }
+
+    [Fact]
+    public void Brillo_y_contraste_envia_el_contraste_en_centesimas_y_el_brillo_entero()
+    {
+        var f = new FormularioDeBrilloContraste { Contraste = 1.37m, Brillo = -21 };
+
+        Assert.Equal("""{"contrasteCentesimas":137,"brillo":-21}""", Json(f.Parametros(SinMarcas)));
+    }
+
+    [Fact]
+    public void La_gamma_se_envia_en_milesimas_exactas()
+    {
+        Assert.Equal("""{"gammaMilesimas":2200}""", Json(new FormularioDeGamma { Gamma = 2.2m }.Parametros(SinMarcas)));
+        Assert.Throws<ErrorDeFormulario>(() => new FormularioDeGamma { Gamma = 2.2001m }.Parametros(SinMarcas));
+    }
+
+    [Fact]
+    public void La_ecualizacion_no_lleva_parametros()
+    {
+        Assert.Equal("{}", Json(new FormularioDeEcualizacion().Parametros(SinMarcas)));
+    }
 }
