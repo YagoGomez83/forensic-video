@@ -74,4 +74,23 @@ public class VisorVistaTests
         Assert.Equal(antes.X + 30, vm.Transformacion.Desplazamiento.X, 9);
         Assert.Equal(antes.Y - 10, vm.Transformacion.Desplazamiento.Y, 9);
     }
+
+    [AvaloniaFact]
+    public async Task Arrastrar_con_el_boton_izquierdo_marca_la_region_en_pixeles_de_la_imagen()
+    {
+        var (ventana, vm, lienzo) = await VisorConImagenAsync();
+        vm.ZoomEn(1.7, new Punto(50, 40)); // un zoom y un desplazamiento cualesquiera
+        Dispatcher.UIThread.RunJobs();
+        var (a, b) = (new Point(90.3, 70.6), new Point(210.8, 160.2));
+
+        ventana.MouseDown(lienzo.TranslatePoint(a, ventana)!.Value, MouseButton.Left);
+        ventana.MouseMove(lienzo.TranslatePoint(b, ventana)!.Value);
+        ventana.MouseUp(lienzo.TranslatePoint(b, ventana)!.Value, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        var esperada = vm.Transformacion.RegionEnImagen(new Punto(a.X, a.Y), new Punto(b.X, b.Y), 64, 48);
+        Assert.NotNull(esperada);
+        Assert.Equal(esperada, vm.RegionMarcada);
+        Assert.Equal(esperada, lienzo.Region);
+    }
 }

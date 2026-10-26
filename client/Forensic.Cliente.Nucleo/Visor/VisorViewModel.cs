@@ -9,9 +9,21 @@ namespace Forensic.Cliente.Nucleo.Visor;
 /// contenido queda en memoria. La vista decodifica sólo para mostrar e informa las dimensiones; la
 /// traducción pantalla↔imagen vive en <see cref="TransformacionDeVista"/>.
 /// </summary>
-public sealed partial class VisorViewModel(ClienteForense api, INavegacion navegacion, ObservableObject? volverA, EvidenciaDto evidencia)
+public sealed partial class VisorViewModel(
+    ClienteForense api, INavegacion navegacion, ObservableObject? volverA, EvidenciaDto evidencia, string? operacionDeOrigen = null)
     : ObservableObject
 {
+    /// <summary>Para un derivado recién creado: la operación y sus parámetros tal como los asentó el servidor.</summary>
+    public string? OperacionDeOrigen { get; } = operacionDeOrigen;
+
+    /// <summary>La región marcada para recortar, en píxeles de la imagen original.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AplicarRecorteCommand))]
+    private Region? _regionMarcada;
+
+    [ObservableProperty]
+    private bool _aplicando;
+
     /// <summary>Más que esto no se trae a memoria sólo para previsualizar.</summary>
     public const long TamanoMaximoDePrevisualizacion = 256L * 1024 * 1024;
 
@@ -78,6 +90,44 @@ public sealed partial class VisorViewModel(ClienteForense api, INavegacion naveg
     public void ZoomEn(double factor, Punto cursor) => Transformacion = Transformacion.ZoomEn(factor, cursor);
 
     public void Desplazar(double dx, double dy) => Transformacion = Transformacion.Desplazada(dx, dy);
+
+    /// <summary>Un arrastre en pantalla: la región se guarda ya traducida a píxeles de la imagen.</summary>
+    public void MarcarRegion(Punto desde, Punto hasta) =>
+        RegionMarcada = AnchoImagen > 0 ? Transformacion.RegionEnImagen(desde, hasta, AnchoImagen, AltoImagen) : null;
+
+    private bool HayRegion() => RegionMarcada is not null;
+
+    [RelayCommand(CanExecute = nameof(HayRegion))]
+    private Task AplicarRecorteAsync(CancellationToken ct) =>
+        RegionMarcada is { } r
+            ? AplicarAsync("opencv.recorte/v1", new { x = r.X, y = r.Y, ancho = r.Ancho, alto = r.Alto }, ct)
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// Aplica de verdad en el servidor y abre el derivado que devolvió: no hay previsualización que
+    /// pueda diferir del resultado custodiado.
+    /// </summary>
+    internal async Task AplicarAsync(string tipo, object parametros, CancellationToken ct)
+    {
+        (Error, Aplicando) = (null, true);
+        try
+        {
+            var aplicada = await api.AplicarOperacionAsync(Evidencia.CasoId, Evidencia.Id, tipo, parametros, null, ct);
+            navegacion.IrA(new VisorViewModel(api, navegacion, volverA, aplicada.Derivado, $"{aplicada.Tipo} {aplicada.Parametros}"));
+        }
+        catch (SesionExpiradaException)
+        {
+            // La vuelta al login la hace VentanaViewModel con el evento de la sesión.
+        }
+        catch (ErrorDeApi ex)
+        {
+            Error = Mensajes.Para(ex);
+        }
+        finally
+        {
+            Aplicando = false;
+        }
+    }
 
     [RelayCommand]
     private void Volver()

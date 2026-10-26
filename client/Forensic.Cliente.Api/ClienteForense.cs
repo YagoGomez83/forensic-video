@@ -133,6 +133,15 @@ public sealed class ClienteForense
         return await respuesta.Content.ReadAsByteArrayAsync(ct);
     }
 
+    /// <summary>
+    /// Pide al servidor que aplique una operación del catálogo. El servidor valida, llama al worker,
+    /// custodia el derivado y asienta la operación: el cliente no previsualiza ni calcula nada.
+    /// </summary>
+    public Task<OperacionAplicadaDto> AplicarOperacionAsync(
+        Guid casoId, Guid evidenciaId, string tipo, object parametros, string? nombre, CancellationToken ct) =>
+        EnviarAsync<OperacionAplicadaDto>(
+            HttpMethod.Post, $"casos/{casoId}/evidencias/{evidenciaId}/operaciones", new { tipo, parametros, nombre }, ct);
+
     /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);

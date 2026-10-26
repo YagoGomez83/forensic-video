@@ -20,13 +20,20 @@ public class LienzoDeEvidencia : Control
     public static readonly StyledProperty<TransformacionDeVista?> TransformacionProperty =
         AvaloniaProperty.Register<LienzoDeEvidencia, TransformacionDeVista?>(nameof(Transformacion));
 
+    /// <summary>La región marcada, en píxeles de la imagen: se dibuja tal cual se va a enviar.</summary>
+    public static readonly StyledProperty<Region?> RegionProperty =
+        AvaloniaProperty.Register<LienzoDeEvidencia, Region?>(nameof(Region));
+
     public const double FactorDeZoom = 1.25;
 
+    private static readonly IPen TrazoDeRegion = new Pen(Brushes.Yellow, 1.5, dashStyle: DashStyle.Dash);
+
     private Point? _ultimoArrastre;
+    private Point? _inicioDeRegion;
 
     static LienzoDeEvidencia()
     {
-        AffectsRender<LienzoDeEvidencia>(ImagenProperty, TransformacionProperty);
+        AffectsRender<LienzoDeEvidencia>(ImagenProperty, TransformacionProperty, RegionProperty);
         ClipToBoundsProperty.OverrideDefaultValue<LienzoDeEvidencia>(true);
         FocusableProperty.OverrideDefaultValue<LienzoDeEvidencia>(true);
     }
@@ -41,6 +48,12 @@ public class LienzoDeEvidencia : Control
     {
         get => GetValue(TransformacionProperty);
         set => SetValue(TransformacionProperty, value);
+    }
+
+    public Region? Region
+    {
+        get => GetValue(RegionProperty);
+        set => SetValue(RegionProperty, value);
     }
 
     protected VisorViewModel? Visor => DataContext as VisorViewModel;
@@ -63,6 +76,11 @@ public class LienzoDeEvidencia : Control
     /// <summary>Para lo que se dibuja sobre la imagen (p. ej. la región que se está marcando).</summary>
     protected virtual void DibujarEncima(DrawingContext contexto, TransformacionDeVista t)
     {
+        if (Region is not { } r)
+            return;
+        var a = t.ImagenAPantalla(new Punto(r.X, r.Y));
+        var b = t.ImagenAPantalla(new Punto(r.X + r.Ancho, r.Y + r.Alto));
+        contexto.DrawRectangle(null, TrazoDeRegion, new Rect(new Point(a.X, a.Y), new Point(b.X, b.Y)));
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -83,11 +101,29 @@ public class LienzoDeEvidencia : Control
             e.Pointer.Capture(this);
             e.Handled = true;
         }
+        else if (punto.Properties.IsLeftButtonPressed)
+        {
+            _inicioDeRegion = punto.Position;
+            MarcarHasta(punto.Position);
+            e.Pointer.Capture(this);
+            e.Handled = true;
+        }
+    }
+
+    private void MarcarHasta(Point actual)
+    {
+        if (_inicioDeRegion is { } inicio)
+            Visor?.MarcarRegion(new Punto(inicio.X, inicio.Y), new Punto(actual.X, actual.Y));
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        if (_inicioDeRegion is not null)
+        {
+            MarcarHasta(e.GetPosition(this));
+            return;
+        }
         if (_ultimoArrastre is not { } anterior)
             return;
         var actual = e.GetPosition(this);
@@ -98,6 +134,13 @@ public class LienzoDeEvidencia : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_inicioDeRegion is not null && e.InitialPressMouseButton == MouseButton.Left)
+        {
+            MarcarHasta(e.GetPosition(this));
+            _inicioDeRegion = null;
+            e.Pointer.Capture(null);
+            return;
+        }
         if (_ultimoArrastre is null || e.InitialPressMouseButton is not (MouseButton.Right or MouseButton.Middle))
             return;
         _ultimoArrastre = null;

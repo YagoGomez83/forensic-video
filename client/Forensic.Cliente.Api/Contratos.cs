@@ -44,3 +44,6 @@ public sealed record VerificacionDto(bool EsIntegra, int CantidadAsientos, strin
 public sealed record ExportDeCustodia(
     string Formato, DateTimeOffset GeneradoEn, string GeneradoPor, CasoDto Caso,
     IReadOnlyList<AsientoDto> Asientos, VerificacionDto Verificacion, int CrucesPendientes);
+
+/// <param name="Parametros">Los parámetros canónicos tal como quedaron asentados en el servidor.</param>
+public sealed record OperacionAplicadaDto(EvidenciaDto Derivado, Guid OperacionId, string Tipo, string Parametros, string Entorno);
