@@ -25,6 +25,8 @@ internal sealed class ManejadorDeErrores(IProblemDetailsService problemDetails) 
             // El problema es el worker upstream, no el contenido que mandó el cliente.
             DivergenciaDeControlCruzadoException => (StatusCodes.Status502BadGateway, "Divergencia en el control cruzado"),
             WorkerDeIngestaNoDisponibleException => (StatusCodes.Status503ServiceUnavailable, "Worker de ingesta no disponible"),
+            ProcesamientoRechazadoException => (StatusCodes.Status422UnprocessableEntity, "Operación rechazada"),
+            WorkerDeProcesamientoNoDisponibleException => (StatusCodes.Status503ServiceUnavailable, "Worker de procesamiento no disponible"),
             ExcepcionDeDominio => (StatusCodes.Status422UnprocessableEntity, "Regla forense violada"),
             _ => null,
         };

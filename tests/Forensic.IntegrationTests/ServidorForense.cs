@@ -6,7 +6,9 @@ using Forensic.Api.Controllers;
 using Forensic.Application;
 using Forensic.Application.Casos;
 using Forensic.Application.Custodia;
+using Forensic.Application.Evidencias;
 using Forensic.Application.Identidad;
+using Forensic.Application.Operaciones;
 using Forensic.Domain.Comun;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -58,6 +60,7 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
         builder.ConfigureTestServices(s =>
         {
             s.AddSingleton<IWorkerDeIngesta>(new WorkerDeIngestaDoble());
+            s.AddSingleton<IWorkerDeProcesamiento>(new WorkerDeProcesamientoDoble());
             AutenticacionPorCabeceras.Registrar(s);
             s.AddTransient<IStartupFilter, IpDePrueba>();
         });
@@ -143,6 +146,15 @@ internal static class HttpExtensiones
         contenido.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         return await cliente.PostAsync($"/casos/{casoId}/evidencias?nombre={Uri.EscapeDataString(nombre)}", contenido);
     }
+
+    public static Task<HttpResponseMessage> AplicarOperacionAsync(
+        this HttpClient cliente, Guid casoId, Guid evidenciaId, string tipo, object parametros, string? nombre = null) =>
+        cliente.PostAsJsonAsync(
+            $"/casos/{casoId}/evidencias/{evidenciaId}/operaciones",
+            new AplicarOperacionRequest(tipo, JsonSerializer.SerializeToElement(parametros), nombre));
+
+    public static async Task<List<EvidenciaDto>> EvidenciasAsync(this HttpClient cliente, Guid casoId) =>
+        await (await cliente.GetAsync($"/casos/{casoId}/evidencias")).LeerAsync<List<EvidenciaDto>>();
 
     public static async Task<ExportDeCustodia> ExportarAsync(this HttpClient cliente, Guid casoId) =>
         await (await cliente.GetAsync($"/casos/{casoId}/custodia")).LeerAsync<ExportDeCustodia>();

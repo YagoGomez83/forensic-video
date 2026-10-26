@@ -39,3 +39,13 @@ public sealed class CredencialesInvalidasException(Exception? interna = null)
 /// <summary>Otro proceso modificó el mismo usuario primero. El cliente puede reintentar.</summary>
 public sealed class ConflictoDeIdentidadException(string mensaje, Exception? interna = null)
     : Exception(mensaje, interna);
+
+/// <summary>El worker de procesamiento rechazó el contenido o los parámetros (su API respondió 422).</summary>
+public sealed class ProcesamientoRechazadoException(string mensaje) : Exception(mensaje);
+
+/// <summary>
+/// El worker de procesamiento no respondió, falló o devolvió una respuesta inválida. A diferencia de
+/// la ingesta, no hay estado pendiente: sin operación no hay derivado.
+/// </summary>
+public sealed class WorkerDeProcesamientoNoDisponibleException(string mensaje, Exception? interna = null)
+    : Exception(mensaje, interna);

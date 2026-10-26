@@ -14,7 +14,7 @@ public sealed record EvidenciaDto(
     Guid Id, Guid CasoId, string Hash, long TamanoBytes, string NombreOriginal, ViaProcesamiento Via,
     Guid? PadreId, DateTimeOffset IngestadaEn, string IngestadaPor, bool ControlCruzadoPendiente)
 {
-    internal static EvidenciaDto Desde(Evidencia e, bool controlCruzadoPendiente) =>
+    public static EvidenciaDto Desde(Evidencia e, bool controlCruzadoPendiente) =>
         new(e.Id, e.CasoId, e.Hash.Hex, e.TamanoBytes, e.NombreOriginal, e.Via, e.PadreId, e.IngestadaEn, e.IngestadaPor,
             controlCruzadoPendiente);
 }
