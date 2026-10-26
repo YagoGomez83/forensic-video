@@ -30,6 +30,8 @@ services:
       Identidad__AdminInicial__Contrasena: ${ADMIN_INICIAL_CONTRASENA:-}
       # Control cruzado de cada ingesta. Con el worker caído se ingesta igual y el cruce queda pendiente.
       WorkerIngesta__UrlBase: http://worker-ingest:8000
+      # Operaciones deterministas de OpenCV. Sin él no hay derivados (503), pero la custodia sigue.
+      WorkerProcesamiento__UrlBase: http://worker-procesamiento:8000
     ports:
       - "127.0.0.1:5065:8080"
     volumes:
@@ -39,11 +41,17 @@ services:
         condition: service_healthy
       worker-ingest:
         condition: service_started
+      worker-procesamiento:
+        condition: service_started
 
   worker-ingest:
     build: src/workers/ingest
     ports:
       - "127.0.0.1:8000:8000"
+
+  # Sin puerto publicado: sólo lo llama el servidor, por la red interna del compose.
+  worker-procesamiento:
+    build: src/workers/procesamiento
 
 volumes:
   postgres-datos:

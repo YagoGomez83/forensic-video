@@ -11,6 +11,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Forensic.Application.Operaciones;
 
+/// <summary>La operación que produjo un eslabón, tal como está en su asiento.</summary>
+public sealed record OperacionDelLinaje(
+    long Secuencia, string Tipo, string Parametros, Guid EvidenciaEntradaId, string Entorno, ViaProcesamiento Via,
+    string Actor, DateTimeOffset Timestamp);
+
+public sealed record ReproduccionDelLinaje(long Secuencia, bool Reproducido, bool EntornoCoincide, string Actor, DateTimeOffset Timestamp);
+
+/// <summary>Un paso del historial de un derivado: la evidencia, la operación que la produjo y sus reproducciones.</summary>
+public sealed record EslabonDeLinaje(
+    EvidenciaDto Evidencia, OperacionDelLinaje? Operacion, IReadOnlyList<ReproduccionDelLinaje> Reproducciones);
+
 public sealed record OperacionAplicadaDto(EvidenciaDto Derivado, Guid OperacionId, string Tipo, string Parametros, string Entorno);
 
 /// <param name="Reproducido">El hash de la salida re-ejecutada coincide byte a byte con el asentado.</param>
@@ -73,6 +84,46 @@ public sealed class ServicioDeOperaciones(
         await persistencia.GuardarCambiosAsync(ct);
         return new OperacionAplicadaDto(
             EvidenciaDto.Desde(derivado, controlCruzadoPendiente: false), operacion.Id, operacion.Tipo, operacion.Parametros, operacion.Entorno);
+    }
+
+    /// <summary>
+    /// Historial de una evidencia, del original a ella: cada eslabón con la operación que lo produjo
+    /// (leída de su asiento) y las reproducciones asentadas. Es metadato, no contenido: no se asienta.
+    /// </summary>
+    public async Task<IReadOnlyList<EslabonDeLinaje>> LinajeAsync(Guid casoId, Guid evidenciaId, CancellationToken ct)
+    {
+        var caso = await CargarCasoAsync(casoId, ct);
+        caso.ExigirLectura(actorActual.Actor);
+        var evidencias = (await persistencia.ListarEvidenciasAsync(casoId, ct)).ToDictionary(e => e.Id);
+        if (!evidencias.TryGetValue(evidenciaId, out var actual))
+            throw new NoEncontradoException($"No existe la evidencia {evidenciaId} en el caso.");
+        var cadena = await persistencia.ObtenerCadenaAsync(casoId, ct);
+
+        var eslabones = new List<EslabonDeLinaje>();
+        for (Evidencia? e = actual; e is not null; e = e.PadreId is { } padre ? evidencias.GetValueOrDefault(padre) : null)
+        {
+            var asiento = cadena.SingleOrDefault(a => a.Tipo == TipoAsiento.OperacionAplicada && a.EvidenciaId == e.Id);
+            OperacionDelLinaje? operacion = null;
+            if (asiento is not null)
+            {
+                var o = OperacionAsentada.Desde(asiento);
+                operacion = new OperacionDelLinaje(
+                    asiento.Secuencia, o.Tipo, o.Parametros, o.EvidenciaEntradaId, o.Entorno, o.Via, asiento.Actor, asiento.Timestamp);
+            }
+            var reproducciones = cadena
+                .Where(a => a.Tipo == TipoAsiento.OperacionReproducida && a.EvidenciaId == e.Id)
+                .Select(a =>
+                {
+                    using var detalle = JsonDocument.Parse(a.Detalle);
+                    return new ReproduccionDelLinaje(
+                        a.Secuencia, detalle.RootElement.GetProperty("reproducido").GetBoolean(),
+                        detalle.RootElement.GetProperty("entornoCoincide").GetBoolean(), a.Actor, a.Timestamp);
+                })
+                .ToList();
+            eslabones.Add(new EslabonDeLinaje(EvidenciaDto.Desde(e, controlCruzadoPendiente: false), operacion, reproducciones));
+        }
+        eslabones.Reverse();
+        return eslabones;
     }
 
     /// <summary>Formato del detalle del asiento <see cref="TipoAsiento.OperacionReproducida"/>.</summary>

@@ -136,4 +136,33 @@ public class ReproduccionTests(ServidorForense servidor) : IClassFixture<Servido
 
         Assert.Equal(HttpStatusCode.Locked, (await _ana.ReproducirAsync(casoId, derivado.Id)).StatusCode);
     }
+
+    [Fact]
+    public async Task El_linaje_de_un_derivado_va_del_original_al_derivado_con_cada_operacion_y_sus_reproducciones()
+    {
+        var (casoId, original, primero) = await CasoConRecorteAsync();
+        var segundo = (await (await _ana.AplicarOperacionAsync(casoId, primero.Id, "opencv.rotacion90/v1", new { giros = 1 }))
+            .LeerAsync<OperacionAplicadaDto>()).Derivado;
+        (await _ana.ReproducirAsync(casoId, segundo.Id)).EnsureSuccessStatusCode();
+
+        var linaje = await (await servidor.ClienteDe("aurelio", Rol.Auditor).GetAsync($"/casos/{casoId}/evidencias/{segundo.Id}/linaje"))
+            .LeerAsync<List<EslabonDeLinaje>>();
+
+        Assert.Equal([original.Id, primero.Id, segundo.Id], linaje.Select(e => e.Evidencia.Id));
+        Assert.Null(linaje[0].Operacion);
+        Assert.Equal(("opencv.recorte/v1", """{"alto":4,"ancho":3,"x":1,"y":2}"""), (linaje[1].Operacion!.Tipo, linaje[1].Operacion!.Parametros));
+        Assert.Equal(("opencv.rotacion90/v1", original.Id), (linaje[2].Operacion!.Tipo, linaje[1].Operacion!.EvidenciaEntradaId));
+        Assert.Equal(WorkerDeProcesamientoDoble.Entorno, linaje[2].Operacion!.Entorno);
+        Assert.Empty(linaje[1].Reproducciones);
+        Assert.True(Assert.Single(linaje[2].Reproducciones).Reproducido);
+    }
+
+    [Fact]
+    public async Task El_linaje_exige_lectura_del_caso()
+    {
+        var (casoId, _, derivado) = await CasoConRecorteAsync();
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await servidor.ClienteDe("beto", Rol.Analista).GetAsync($"/casos/{casoId}/evidencias/{derivado.Id}/linaje")).StatusCode);
+    }
 }

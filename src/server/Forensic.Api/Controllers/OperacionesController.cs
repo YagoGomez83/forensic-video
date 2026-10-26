@@ -23,6 +23,11 @@ public sealed class OperacionesController(ServicioDeOperaciones operaciones) : C
     /// Re-ejecuta la operación de un derivado desde su asiento y compara el hash byte a byte. Queda
     /// asentado. Lo puede pedir cualquiera con lectura del caso.
     /// </summary>
+    /// <summary>Historial de la evidencia desde el original, con cada operación y sus reproducciones.</summary>
+    [HttpGet("linaje")]
+    public Task<IReadOnlyList<EslabonDeLinaje>> Linaje(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        operaciones.LinajeAsync(casoId, evidenciaId, ct);
+
     [HttpPost("reproducir")]
     public Task<ResultadoDeReproduccion> Reproducir(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
         operaciones.ReproducirAsync(casoId, evidenciaId, ct);
