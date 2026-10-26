@@ -1,0 +1,5 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeRecorteVista">
+  <TextBlock Text="Arrastrá con el botón izquierdo sobre la imagen para marcar la región." Opacity="0.8" />
+</UserControl>

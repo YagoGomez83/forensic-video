@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeDenoiseNlMeansVista"
+             x:DataType="op:FormularioDeDenoiseNlMeans">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <TextBlock Text="h:" VerticalAlignment="Center" />
+    <NumericUpDown Width="110" Increment="1" FormatString="0" Value="{Binding H}" />
+    <TextBlock Text="h color:" VerticalAlignment="Center" />
+    <NumericUpDown Width="110" Increment="1" FormatString="0" Value="{Binding HColor}" />
+    <TextBlock Text="Plantilla (impar):" VerticalAlignment="Center" />
+    <NumericUpDown Width="110" Increment="2" FormatString="0" Value="{Binding Plantilla}" />
+    <TextBlock Text="Búsqueda (impar):" VerticalAlignment="Center" />
+    <NumericUpDown Width="110" Increment="2" FormatString="0" Value="{Binding Busqueda}" />
+  </StackPanel>
+</UserControl>

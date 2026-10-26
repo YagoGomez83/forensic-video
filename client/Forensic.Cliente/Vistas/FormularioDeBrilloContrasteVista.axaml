@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeBrilloContrasteVista"
+             x:DataType="op:FormularioDeBrilloContraste">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <TextBlock Text="Contraste:" VerticalAlignment="Center" />
+    <NumericUpDown Width="120" Increment="0.05" FormatString="0.##" Value="{Binding Contraste}" />
+    <TextBlock Text="Brillo:" VerticalAlignment="Center" />
+    <NumericUpDown Width="120" Increment="1" FormatString="0" Value="{Binding Brillo}" />
+  </StackPanel>
+</UserControl>

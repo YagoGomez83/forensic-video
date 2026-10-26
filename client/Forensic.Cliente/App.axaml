@@ -1,0 +1,20 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Forensic.Cliente"
+             x:Class="Forensic.Cliente.App"
+             RequestedThemeVariant="Default">
+  <Application.DataTemplates>
+    <local:LocalizadorDeVistas />
+  </Application.DataTemplates>
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="#C62828" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.aviso">
+      <Setter Property="Foreground" Value="#8D6E00" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </Application.Styles>
+</Application>

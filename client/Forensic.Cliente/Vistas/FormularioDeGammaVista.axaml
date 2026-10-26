@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeGammaVista"
+             x:DataType="op:FormularioDeGamma">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <TextBlock Text="Gamma (mayor que 1 aclara):" VerticalAlignment="Center" />
+    <NumericUpDown Width="120" Increment="0.1" FormatString="0.###" Value="{Binding Gamma}" />
+  </StackPanel>
+</UserControl>

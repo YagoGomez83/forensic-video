@@ -1,0 +1,5 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Forensic.Cliente.Vistas.FormularioDeEcualizacionVista">
+  <TextBlock Text="Sin parámetros: ecualiza el histograma (en color, sobre la luminancia)." Opacity="0.8" />
+</UserControl>

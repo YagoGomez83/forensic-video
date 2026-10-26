@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Forensic.Cliente.Nucleo.Sesion"
+             x:Class="Forensic.Cliente.Vistas.CambioDeContrasenaVista"
+             x:DataType="vm:CambioDeContrasenaViewModel">
+  <StackPanel Width="380" Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Text="Cambiar la contraseña" FontSize="20" FontWeight="SemiBold" />
+    <TextBlock Classes="aviso" IsVisible="{Binding Obligatorio}"
+               Text="Tu contraseña es temporal: tenés que cambiarla antes de seguir." />
+    <TextBox x:Name="Nueva" Watermark="Contraseña nueva" PasswordChar="●" Text="{Binding Nueva}" />
+    <TextBox x:Name="Confirmacion" Watermark="Repetila" PasswordChar="●" Text="{Binding Confirmacion}" />
+    <Button x:Name="Cambiar" Content="Cambiar" IsDefault="True" HorizontalAlignment="Stretch"
+            Command="{Binding CambiarCommand}" />
+    <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+  </StackPanel>
+</UserControl>
