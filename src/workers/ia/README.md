@@ -24,6 +24,12 @@ hash de los pesos, runtime, proveedor y GPU), nunca como prueba.
   también es un resultado. Misma lectura de imagen que el worker de procesamiento: sin orientación
   EXIF, una sola página.
 
+- `POST /v1/superresolucion` (multipart: `parametros` = `{}`, `entrada` = la imagen en crudo, hasta
+  1920 x 1080): Real-ESRGAN x4plus en mosaicos de 128 con margen de 10. Devuelve el derivado PNG
+  (compresión fija) y en la cabecera `X-Reporte` su procedencia: operación, modelo, SHA-256 de la
+  entrada y de la salida, entorno. El cliente reenvía PNG y reporte al servidor tal cual. Inventa
+  detalle plausible, no recupera el real.
+
 Son pistas, no conclusiones: «el modelo vio un auto con 0,82», nunca «hay un auto».
 
 ## Prueba de concepto con GPU

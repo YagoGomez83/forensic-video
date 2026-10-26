@@ -129,3 +129,52 @@ def test_detectar_rechaza_entradas_demasiado_grandes(cliente, monkeypatch):
     r = _detectar(cliente, b"0123456789A")
 
     assert r.status_code == 413
+
+
+# --- POST /v1/superresolucion ---
+
+REALESRGAN_SHA256 = "1b21f3442cb75a7f76ae99cb7742a84510d14f428a6b2d3d8960440f7235a0bc"
+
+
+def _superresolver(cliente, contenido: bytes, parametros: str = "{}"):
+    return cliente.post(
+        "/v1/superresolucion",
+        data={"parametros": parametros},
+        files={"entrada": ("entrada.bin", contenido, "application/octet-stream")},
+    )
+
+
+def test_superresolucion_devuelve_el_png_y_su_reporte(cliente):
+    import hashlib
+
+    import cv2
+    import numpy as np
+
+    contenido = _png(np.random.default_rng(5).integers(0, 256, (12, 16, 3), dtype=np.uint8))
+
+    r = _superresolver(cliente, contenido)
+
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    derivado = cv2.imdecode(np.frombuffer(r.content, np.uint8), cv2.IMREAD_UNCHANGED)
+    assert derivado.shape == (48, 64, 3)
+    reporte = json.loads(r.headers["x-reporte"])
+    assert reporte["operacion"] == "ia.superresolucion/v1"
+    assert reporte["parametros"] == {}
+    assert reporte["modelo"] == {"id": "realesrgan-x4plus", "version": "v0.1.0", "sha256": REALESRGAN_SHA256}
+    assert reporte["entrada"] == {"sha256": hashlib.sha256(contenido).hexdigest(), "ancho": 16, "alto": 12}
+    assert reporte["salida"] == {"sha256": hashlib.sha256(r.content).hexdigest(), "ancho": 64, "alto": 48}
+    assert reporte["entorno"]["proveedor"] in ("CUDAExecutionProvider", "CPUExecutionProvider")
+    assert reporte["entorno"]["postproceso"] == {
+        "escala": 4,
+        "mosaico": 128,
+        "margen": 10,
+        "png": "compresion-6",
+    }
+
+
+def test_superresolucion_rechaza_parametros_y_contenido_invalidos(cliente):
+    import numpy as np
+
+    assert _superresolver(cliente, _png(np.zeros((4, 4, 3), np.uint8)), '{"escala":2}').status_code == 422
+    assert _superresolver(cliente, b"no es una imagen").status_code == 422

@@ -7,6 +7,14 @@
       "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063",
       "licencia": "Apache-2.0",
       "origen": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx"
+    },
+    {
+      "id": "realesrgan-x4plus",
+      "version": "v0.1.0",
+      "archivo": "realesrgan_x4plus.onnx",
+      "sha256": "1b21f3442cb75a7f76ae99cb7742a84510d14f428a6b2d3d8960440f7235a0bc",
+      "licencia": "BSD-3-Clause",
+      "origen": "https://github.com/YagoGomez83/forensic-video/releases/download/modelos-ia-v1/realesrgan_x4plus.onnx"
     }
   ]
 }
