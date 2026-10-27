@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Forensic.Api.Controllers;
 using Forensic.Cliente.Api;
 using Forensic.Domain.Comun;
@@ -113,5 +113,91 @@ public class ContratoDelClienteDeEscritorioTests(ServidorForense servidor) : ICl
         Assert.Equal(
             ["CasoAbierto", "EvidenciaIngestada", "EvidenciaAccedida", "OperacionAplicada", "OperacionReproducida"],
             custodia.Asientos.Select(a => a.Tipo));
+    }
+
+    [Fact]
+    public async Task Un_reporte_de_ia_reenviado_por_el_cliente_vuelve_tipado_y_marcado_solo_investigacion()
+    {
+        var ct = CancellationToken.None;
+        var cliente = await AnalistaAsync($"ia-{Guid.NewGuid():N}"[..16]);
+        var caso = await cliente.AbrirCasoAsync($"EXP-{Guid.NewGuid():N}"[..20], "Prueba de IA", ct);
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(2048);
+        var original = await cliente.IngestarAsync(caso.Id, "cam1.png", new MemoryStream(bytes), bytes.Length, null, ct);
+        // Tal como lo devuelve POST /v1/detectar del worker de IA.
+        var reporte = $$$"""
+            {"analisis": "ia.deteccion/v1", "parametros": {"umbralConfianzaMilesimas": 500},
+             "modelo": {"id": "yolox-s", "version": "0.1.1rc0", "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"},
+             "entrada": {"sha256": "{{{original.Hash}}}", "ancho": 32, "alto": 32},
+             "entorno": {"proveedor": "CPUExecutionProvider"},
+             "hallazgos": [{"region": {"x": 1, "y": 2, "ancho": 3, "alto": 4}, "clase": "car", "confianza": 0.8213145732879639,
+                            "crudo": {"puntaje": 0.8213145732879639}}]}
+            """;
+
+        var analisis = await cliente.RegistrarAnalisisIaAsync(caso.Id, original.Id, reporte, ct);
+
+        Assert.Equal(Forensic.Cliente.Api.ViaProcesamiento.SoloInvestigacion, analisis.Via);
+        Assert.Equal(new Forensic.Cliente.Api.ModeloDeIaDto("yolox-s", "0.1.1rc0", "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"), analisis.Modelo);
+        var hallazgo = Assert.Single(analisis.Hallazgos);
+        Assert.Equal(new Forensic.Cliente.Api.RegionDto(1, 2, 3, 4), hallazgo.Region);
+        Assert.Equal(("car", (string?)null, 0.8213145732879639m), (hallazgo.Clase, hallazgo.TextoLeido, hallazgo.Confianza));
+        Assert.Equal("""{"puntaje": 0.8213145732879639}""", hallazgo.Crudo);
+        Assert.Equal(Forensic.Cliente.Api.ViaProcesamiento.SoloInvestigacion, hallazgo.Via);
+        Assert.Equal(analisis, Assert.Single(await cliente.ListarAnalisisIaAsync(caso.Id, original.Id, ct)), new MismoAnalisis());
+        Assert.Equal("HallazgosRegistrados", (await cliente.ExportarCustodiaAsync(caso.Id, ct)).Asientos[^1].Tipo);
+    }
+
+    [Fact]
+    public async Task Un_ocr_reenviado_por_el_cliente_vuelve_con_el_texto_leido()
+    {
+        var ct = CancellationToken.None;
+        var cliente = await AnalistaAsync($"ocr-{Guid.NewGuid():N}"[..16]);
+        var caso = await cliente.AbrirCasoAsync($"EXP-{Guid.NewGuid():N}"[..20], "Prueba de OCR", ct);
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(2048);
+        var original = await cliente.IngestarAsync(caso.Id, "patente.png", new MemoryStream(bytes), bytes.Length, null, ct);
+        // Tal como lo devuelve POST /v1/ocr del worker de IA.
+        var reporte = $$$"""
+            {"analisis": "ia.ocr/v1", "parametros": {"umbralConfianzaMilesimas": 500},
+             "modelo": {"id": "ppocrv4-en", "version": "PP-OCRv4", "sha256": "3d37f552dfc2354511c40cd5b68793129ce54222aa2279bf4a54dcdee9cf134f"},
+             "entrada": {"sha256": "{{{original.Hash}}}", "ancho": 96, "alto": 32},
+             "entorno": {"proveedor": "CPUExecutionProvider"},
+             "hallazgos": [{"region": {"x": 1, "y": 2, "ancho": 80, "alto": 20}, "textoLeido": "ABC123", "confianza": 0.82,
+                            "crudo": {"caracteres": []}}]}
+            """;
+
+        var analisis = await cliente.RegistrarAnalisisIaAsync(caso.Id, original.Id, reporte, ct);
+
+        Assert.Equal(("ia.ocr/v1", Forensic.Cliente.Api.ViaProcesamiento.SoloInvestigacion), (analisis.Analisis, analisis.Via));
+        var hallazgo = Assert.Single(analisis.Hallazgos);
+        Assert.Equal(((string?)null, "ABC123", 0.82m), (hallazgo.Clase, hallazgo.TextoLeido, hallazgo.Confianza));
+    }
+
+    [Fact]
+    public async Task Una_super_resolucion_registrada_por_el_cliente_crea_un_derivado_solo_investigacion_con_el_modelo_en_el_linaje()
+    {
+        var ct = CancellationToken.None;
+        var cliente = await AnalistaAsync($"sr-{Guid.NewGuid():N}"[..16]);
+        var caso = await cliente.AbrirCasoAsync($"EXP-{Guid.NewGuid():N}"[..20], "Prueba de super-resolución", ct);
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(2048);
+        var original = await cliente.IngestarAsync(caso.Id, "cam1.png", new MemoryStream(bytes), bytes.Length, null, ct);
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. System.Security.Cryptography.RandomNumberGenerator.GetBytes(512)];
+        var sha256Png = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(png)).ToLowerInvariant();
+        // Tal como lo manda POST /v1/superresolucion en la cabecera X-Reporte.
+        var reporte = $$$"""{"operacion":"ia.superresolucion/v1","parametros":{},"modelo":{"id":"realesrgan-x4plus","version":"v0.1.0","sha256":"1b21f3442cb75a7f76ae99cb7742a84510d14f428a6b2d3d8960440f7235a0bc"},"entrada":{"sha256":"{{{original.Hash}}}","ancho":16,"alto":12},"salida":{"sha256":"{{{sha256Png}}}","ancho":64,"alto":48},"entorno":{"proveedor":"CPUExecutionProvider"}}""";
+
+        var aplicada = await cliente.RegistrarOperacionIaAsync(caso.Id, original.Id, reporte, png, "cam1-x4.png", ct);
+
+        Assert.Equal((sha256Png, "cam1-x4.png", original.Id), (aplicada.Derivado.Hash, aplicada.Derivado.NombreOriginal, aplicada.Derivado.PadreId));
+        Assert.Equal(Forensic.Cliente.Api.ViaProcesamiento.SoloInvestigacion, aplicada.Derivado.Via);
+        var operacion = (await cliente.ObtenerLinajeAsync(caso.Id, aplicada.Derivado.Id, ct))[^1].Operacion!;
+        Assert.Equal(("ia.superresolucion/v1", "realesrgan-x4plus"), (operacion.Tipo, operacion.Modelo!.Id));
+    }
+
+    /// <summary>Los records con listas no se comparan por valor: se compara el id y los hallazgos uno por uno.</summary>
+    private sealed class MismoAnalisis : IEqualityComparer<Forensic.Cliente.Api.AnalisisIaDto>
+    {
+        public bool Equals(Forensic.Cliente.Api.AnalisisIaDto? a, Forensic.Cliente.Api.AnalisisIaDto? b) =>
+            a is not null && b is not null && a.Id == b.Id && a.Hallazgos.SequenceEqual(b.Hallazgos);
+
+        public int GetHashCode(Forensic.Cliente.Api.AnalisisIaDto a) => a.Id.GetHashCode();
     }
 }

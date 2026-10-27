@@ -17,7 +17,11 @@ internal sealed class NavegacionRegistrada : INavegacion
     {
     }
 
+    public Nucleo.Visor.VisorViewModel? AnalisisIaDe { get; private set; }
+
     public void IrACasos() => FueACasos = true;
+
+    public void IrAAnalisisIa(Nucleo.Visor.VisorViewModel visor) => AnalisisIaDe = visor;
 
     public void IrA(ObservableObject pantalla) => Actual = pantalla;
 }

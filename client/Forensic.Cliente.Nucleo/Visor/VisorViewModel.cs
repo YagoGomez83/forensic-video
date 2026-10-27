@@ -95,6 +95,9 @@ public sealed partial class VisorViewModel(
     internal ClienteForense Api => api;
     internal INavegacion Navegacion => navegacion;
 
+    /// <summary>Adónde vuelve el visor (el caso); un derivado abierto desde aquí vuelve al mismo lugar.</summary>
+    internal ObservableObject? VolverA => volverA;
+
     [RelayCommand]
     private async Task CargarAsync(CancellationToken ct)
     {
@@ -233,6 +236,10 @@ public sealed partial class VisorViewModel(
 
     [RelayCommand]
     private void VerLinaje() => navegacion.IrA(new LinajeViewModel(api, navegacion, this, Evidencia));
+
+    /// <summary>La IA va en su propia pantalla: lo «sólo investigación» no comparte el combo de operaciones.</summary>
+    [RelayCommand]
+    private void AbrirAnalisisIa() => navegacion.IrAAnalisisIa(this);
 
     [RelayCommand]
     private void Volver()

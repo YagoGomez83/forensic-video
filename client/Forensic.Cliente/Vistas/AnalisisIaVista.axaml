@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Forensic.Cliente.Nucleo.Ia"
+             xmlns:visor="using:Forensic.Cliente.Nucleo.Visor"
+             xmlns:c="using:Forensic.Cliente.Controles"
+             xmlns:api="using:Forensic.Cliente.Api"
+             x:Class="Forensic.Cliente.Vistas.AnalisisIaVista"
+             x:DataType="vm:AnalisisIaViewModel">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Margin="12" Spacing="6">
+      <Border Classes="soloInvestigacion">
+        <TextBlock x:Name="FranjaSoloInvestigacion" FontWeight="SemiBold" TextWrapping="Wrap"
+                   Text="SÓLO INVESTIGACIÓN: lo que produce la IA es una pista, no prueba. Queda asentado con su modelo y nunca puede presentarse como admisible." />
+      </Border>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="← Visor" Command="{Binding VolverCommand}" />
+        <TextBlock Text="{Binding Evidencia.NombreOriginal, StringFormat='Análisis de IA de {0}'}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      </StackPanel>
+      <TextBlock Text="{Binding Evidencia.Hash, StringFormat='SHA-256 {0}'}" FontFamily="Consolas,Menlo,monospace" FontSize="11" Opacity="0.7" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Umbral de confianza:" VerticalAlignment="Center" />
+        <NumericUpDown x:Name="Umbral" Value="{Binding Umbral}" Minimum="0.001" Maximum="1" Increment="0.05" FormatString="0.000" Width="140" />
+        <Button x:Name="Detectar" Content="Detectar objetos" Command="{Binding DetectarCommand}" />
+        <Button x:Name="LeerTexto" Content="Leer texto (OCR)" Command="{Binding LeerTextoCommand}" />
+        <Button x:Name="SuperResolver" Content="Super-resolución x4" Command="{Binding SuperResolverCommand}" />
+        <ProgressBar IsIndeterminate="True" Width="120" IsVisible="{Binding Ocupado}" />
+      </StackPanel>
+      <TextBlock Text="Corre en el worker de IA de esta workstation; el servidor verifica el hash de entrada y el modelo antes de asentarlo." Opacity="0.6" FontSize="12" />
+      <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+    <DockPanel DockPanel.Dock="Right" Width="340" Margin="0,0,12,12">
+      <TextBlock DockPanel.Dock="Top" Text="Análisis registrados" FontWeight="SemiBold" Margin="0,0,0,6" />
+      <ListBox x:Name="Analisis" DockPanel.Dock="Top" MaxHeight="220" ItemsSource="{Binding Analisis}" SelectedItem="{Binding AnalisisElegido}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="api:AnalisisIaDto">
+            <StackPanel Spacing="2">
+              <TextBlock FontFamily="Consolas,Menlo,monospace" FontSize="12">
+                <Run Text="{Binding Analisis}" />
+                <Run Text=" · " />
+                <Run Text="{Binding Modelo.Id}" />
+                <Run Text=" " />
+                <Run Text="{Binding Modelo.Version}" />
+              </TextBlock>
+              <TextBlock Opacity="0.7" FontSize="12">
+                <Run Text="{Binding Actor, Mode=OneWay, StringFormat='por {0}'}" />
+                <Run Text="{Binding RegistradoEn, Mode=OneWay, StringFormat=' · {0:g}'}" />
+                <Run Text="{Binding Hallazgos.Count, Mode=OneWay, StringFormat=' · {0} hallazgos'}" />
+              </TextBlock>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <TextBlock DockPanel.Dock="Top" Text="Hallazgos del análisis elegido" FontWeight="SemiBold" Margin="0,12,0,6" />
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Hallazgos}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:HallazgoALaVista">
+              <StackPanel Margin="0,0,0,6">
+                <TextBlock Text="{Binding Descripcion}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Region, StringFormat='Región (píxeles de la imagen): {0}'}" FontSize="11" Opacity="0.7" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+    <!-- El lienzo trabaja sobre el visor de origen: su zoom y su desplazamiento son los mismos. -->
+    <Border Background="#202020" DataContext="{Binding Visor}">
+      <c:LienzoDeEvidencia x:Name="Lienzo" x:DataType="visor:VisorViewModel" Marcable="False"
+                           Transformacion="{Binding Transformacion}"
+                           Hallazgos="{Binding $parent[UserControl].((vm:AnalisisIaViewModel)DataContext).Hallazgos}" />
+    </Border>
+  </DockPanel>
+</UserControl>

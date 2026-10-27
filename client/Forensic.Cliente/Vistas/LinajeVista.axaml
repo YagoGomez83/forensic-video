@@ -24,7 +24,8 @@
         <DataTemplate x:DataType="api:EslabonDeLinaje">
           <StackPanel Spacing="2">
             <TextBlock Text="{Binding Evidencia.NombreOriginal}" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding Evidencia.Via}" Opacity="0.8" />
+            <TextBlock Text="{Binding Evidencia.Via}" Opacity="0.8"
+                       Classes.soloInvestigacion="{Binding Evidencia.Via, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static api:ViaProcesamiento.SoloInvestigacion}}" />
             <TextBlock Text="{Binding Evidencia.Hash, StringFormat='SHA-256 {0}'}" FontFamily="Consolas,Menlo,monospace" FontSize="11" Opacity="0.7" />
             <TextBlock Text="Original ingestado" Opacity="0.7" IsVisible="{Binding Operacion, Converter={x:Static ObjectConverters.IsNull}}" />
             <StackPanel IsVisible="{Binding Operacion, Converter={x:Static ObjectConverters.IsNotNull}}" Spacing="2">

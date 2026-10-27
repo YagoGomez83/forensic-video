@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:api="using:Forensic.Cliente.Api"
              xmlns:vm="using:Forensic.Cliente.Nucleo.Visor"
              xmlns:c="using:Forensic.Cliente.Controles"
              xmlns:op="using:Forensic.Cliente.Nucleo.Operaciones"
@@ -11,8 +12,10 @@
         <Button Content="← Caso" Command="{Binding VolverCommand}" />
         <Button Content="Linaje y reproducción" Command="{Binding VerLinajeCommand}" />
         <Button Content="Descargar…" Click="ElegirDestino" />
+        <Button x:Name="AbrirAnalisisIa" Content="Análisis de IA…" Command="{Binding AbrirAnalisisIaCommand}" />
         <TextBlock Text="{Binding Evidencia.NombreOriginal}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-        <TextBlock Text="{Binding Evidencia.Via}" VerticalAlignment="Center" Opacity="0.8" />
+        <TextBlock x:Name="Via" Text="{Binding Evidencia.Via}" VerticalAlignment="Center" Opacity="0.8"
+                   Classes.soloInvestigacion="{Binding Evidencia.Via, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static api:ViaProcesamiento.SoloInvestigacion}}" />
         <TextBlock Text="{Binding Transformacion.Zoom, StringFormat='Zoom {0:P0}'}" VerticalAlignment="Center" Opacity="0.7" />
       </StackPanel>
       <TextBlock Text="{Binding Evidencia.Hash, StringFormat='SHA-256 {0}'}" FontFamily="Consolas,Menlo,monospace" FontSize="11" Opacity="0.7" />

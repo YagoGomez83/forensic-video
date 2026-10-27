@@ -1,6 +1,7 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -164,6 +165,49 @@ public sealed class ClienteForense
         await origen.CopyToAsync(destino, ct);
     }
 
+    /// <summary>
+    /// Reporta al servidor un análisis que corrió el worker de IA de esta workstation. El JSON del
+    /// worker viaja tal cual, sin re-serializar: el cliente no interpreta ni retoca lo que dijo el
+    /// modelo. El servidor verifica lo que puede, lo marca «sólo investigación» y lo asienta.
+    /// </summary>
+    public async Task<AnalisisIaDto> RegistrarAnalisisIaAsync(
+        Guid casoId, Guid evidenciaId, string reporteDelWorker, CancellationToken ct)
+    {
+        using var peticion = new HttpRequestMessage(HttpMethod.Post, $"casos/{casoId}/evidencias/{evidenciaId}/analisis-ia")
+        {
+            Content = new StringContent(reporteDelWorker, Encoding.UTF8, "application/json"),
+        };
+        using var respuesta = await EnviarAsync(peticion, ct);
+        return (await respuesta.Content.ReadFromJsonAsync<AnalisisIaDto>(Json, ct))!;
+    }
+
+    /// <summary>
+    /// Registra una operación de IA hecha en la workstation: el PNG y el reporte del worker, los dos tal
+    /// cual. El servidor vuelve a hashear el PNG, valida la procedencia y lo marca «sólo investigación».
+    /// </summary>
+    public async Task<OperacionAplicadaDto> RegistrarOperacionIaAsync(
+        Guid casoId, Guid evidenciaId, string reporteDelWorker, byte[] png, string? nombre, CancellationToken ct)
+    {
+        var salida = new ByteArrayContent(png);
+        salida.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        var formulario = new MultipartFormDataContent
+        {
+            { new StringContent(reporteDelWorker, Encoding.UTF8), "reporte" },
+            { salida, "salida", "salida.png" },
+        };
+        if (nombre is not null)
+            formulario.Add(new StringContent(nombre, Encoding.UTF8), "nombre");
+        using var peticion = new HttpRequestMessage(HttpMethod.Post, $"casos/{casoId}/evidencias/{evidenciaId}/operaciones-ia")
+        {
+            Content = formulario,
+        };
+        using var respuesta = await EnviarAsync(peticion, ct);
+        return (await respuesta.Content.ReadFromJsonAsync<OperacionAplicadaDto>(Json, ct))!;
+    }
+
+    public Task<IReadOnlyList<AnalisisIaDto>> ListarAnalisisIaAsync(Guid casoId, Guid evidenciaId, CancellationToken ct) =>
+        EnviarAsync<IReadOnlyList<AnalisisIaDto>>(HttpMethod.Get, $"casos/{casoId}/evidencias/{evidenciaId}/analisis-ia", null, ct);
+
     /// <summary>La cadena de custodia del caso con la verificación que hace el servidor.</summary>
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);
@@ -220,7 +264,7 @@ public sealed class ClienteForense
     };
 
     /// <summary>El <c>detail</c> (o el <c>title</c>) del ProblemDetails, tal como lo escribió el servidor.</summary>
-    private static async Task<string?> DetalleAsync(HttpResponseMessage respuesta, CancellationToken ct)
+    internal static async Task<string?> DetalleAsync(HttpResponseMessage respuesta, CancellationToken ct)
     {
         try
         {

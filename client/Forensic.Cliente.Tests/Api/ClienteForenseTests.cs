@@ -1,6 +1,7 @@
-using System.Net;
+﻿using System.Net;
 using Forensic.Cliente.Api;
 using Forensic.Cliente.Tests.Dobles;
+using Forensic.Cliente.Tests.ViewModels;
 
 namespace Forensic.Cliente.Tests.Api;
 
@@ -100,5 +101,77 @@ public class ClienteForenseTests
         _sesion.Iniciar("jwt-secreto", DateTimeOffset.UtcNow.AddMinutes(15));
 
         Assert.DoesNotContain("jwt-secreto", _sesion.ToString());
+    }
+
+    [Fact]
+    public async Task El_reporte_del_worker_de_ia_se_reenvia_al_servidor_sin_tocarlo()
+    {
+        // Espacios, orden de claves y dígitos tal cual: el cliente no re-serializa lo que dijo el modelo.
+        const string reporte = """{"analisis": "ia.deteccion/v1",  "hallazgos": [{"confianza": 0.8213145732879639, "crudo": {"b": 1, "a": 2}}]}""";
+        var casoId = Guid.NewGuid();
+        var evidenciaId = Guid.NewGuid();
+        _servidor.En(HttpMethod.Post, $"/casos/{casoId}/evidencias/{evidenciaId}/analisis-ia", HttpStatusCode.Created, new
+        {
+            id = Guid.NewGuid(), evidenciaId, analisis = "ia.deteccion/v1", parametros = """{"umbralConfianzaMilesimas":500}""",
+            modelo = new { id = "yolox-s", version = "0.1.1rc0", sha256 = new string('c', 64) }, entorno = "{}", actor = "lucia",
+            registradoEn = DateTimeOffset.UtcNow, via = "SoloInvestigacion",
+            hallazgos = new[]
+            {
+                new
+                {
+                    orden = 0, region = new { x = 1, y = 2, ancho = 3, alto = 4 }, clase = "car", textoLeido = (string?)null,
+                    confianza = 0.8213145732879639m, crudo = """{"b": 1, "a": 2}""", via = "SoloInvestigacion",
+                },
+            },
+        });
+
+        var analisis = await Cliente().RegistrarAnalisisIaAsync(casoId, evidenciaId, reporte, CancellationToken.None);
+
+        Assert.Equal(reporte, _servidor.Cuerpos.Single());
+        Assert.Equal("application/json", _servidor.Peticiones.Single().Content!.Headers.ContentType!.MediaType);
+        Assert.Equal(ViaProcesamiento.SoloInvestigacion, analisis.Via);
+        var hallazgo = Assert.Single(analisis.Hallazgos);
+        Assert.Equal((0.8213145732879639m, "car", new RegionDto(1, 2, 3, 4)), (hallazgo.Confianza, hallazgo.Clase, hallazgo.Region));
+        Assert.Equal(ViaProcesamiento.SoloInvestigacion, hallazgo.Via);
+    }
+
+    [Fact]
+    public async Task Una_operacion_de_ia_se_registra_con_el_png_y_el_reporte_tal_cual()
+    {
+        var casoId = CasosViewModelsTests.CasoId;
+        var evidenciaId = Guid.NewGuid();
+        var derivadoId = Guid.NewGuid();
+        const string reporte = """{"operacion":"ia.superresolucion/v1","parametros":{},"salida":{"sha256":"ab"}}""";
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 7];
+        _servidor.En(HttpMethod.Post, $"/casos/{casoId}/evidencias/{evidenciaId}/operaciones-ia", HttpStatusCode.Created, new
+        {
+            derivado = CasosViewModelsTests.Evidencia(derivadoId, evidenciaId, "x4.png", "SoloInvestigacion"),
+            operacionId = Guid.NewGuid(), tipo = "ia.superresolucion/v1", parametros = "{}", entorno = "{}",
+        });
+
+        var aplicada = await Cliente().RegistrarOperacionIaAsync(casoId, evidenciaId, reporte, png, "x4.png", CancellationToken.None);
+
+        Assert.Equal((derivadoId, ViaProcesamiento.SoloInvestigacion), (aplicada.Derivado.Id, aplicada.Derivado.Via));
+        var cuerpo = _servidor.Cuerpos.Single()!;
+        Assert.Equal("multipart/form-data", _servidor.Peticiones.Single().Content!.Headers.ContentType!.MediaType);
+        Assert.Contains("name=reporte", cuerpo);
+        Assert.Contains(reporte, cuerpo);
+        Assert.Contains("name=salida", cuerpo);
+        Assert.Contains("name=nombre", cuerpo);
+        Assert.Contains("x4.png", cuerpo);
+        var bytes = _servidor.Bytes.Single()!;
+        Assert.Contains(Enumerable.Range(0, bytes.Length - png.Length + 1), i => bytes.AsSpan(i, png.Length).SequenceEqual(png));
+    }
+
+    [Fact]
+    public async Task Los_analisis_de_ia_de_una_evidencia_se_listan()
+    {
+        var casoId = Guid.NewGuid();
+        var evidenciaId = Guid.NewGuid();
+        _servidor.En(HttpMethod.Get, $"/casos/{casoId}/evidencias/{evidenciaId}/analisis-ia", HttpStatusCode.OK, Array.Empty<object>());
+
+        var analisis = await Cliente().ListarAnalisisIaAsync(casoId, evidenciaId, CancellationToken.None);
+
+        Assert.Empty(analisis);
     }
 }

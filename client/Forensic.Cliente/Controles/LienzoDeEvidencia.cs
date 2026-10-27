@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using System.Globalization;
+using Forensic.Cliente.Nucleo.Ia;
 using Forensic.Cliente.Nucleo.Operaciones;
 using Forensic.Cliente.Nucleo.Visor;
 
@@ -30,16 +31,25 @@ public class LienzoDeEvidencia : Control
     public static readonly StyledProperty<IReadOnlyList<PuntoDeImagen>?> PuntosProperty =
         AvaloniaProperty.Register<LienzoDeEvidencia, IReadOnlyList<PuntoDeImagen>?>(nameof(Puntos));
 
+    /// <summary>Los hallazgos de IA, en píxeles de la imagen: recuadros con lo que dijo el modelo.</summary>
+    public static readonly StyledProperty<IReadOnlyList<HallazgoALaVista>?> HallazgosProperty =
+        AvaloniaProperty.Register<LienzoDeEvidencia, IReadOnlyList<HallazgoALaVista>?>(nameof(Hallazgos));
+
+    /// <summary>Si el botón izquierdo marca regiones o puntos. Zoom y desplazamiento funcionan siempre.</summary>
+    public static readonly StyledProperty<bool> MarcableProperty =
+        AvaloniaProperty.Register<LienzoDeEvidencia, bool>(nameof(Marcable), defaultValue: true);
+
     public const double FactorDeZoom = 1.25;
 
     private static readonly IPen TrazoDeRegion = new Pen(Brushes.Yellow, 1.5, dashStyle: DashStyle.Dash);
+    private static readonly IPen TrazoDeHallazgo = new Pen(Brushes.Magenta, 1.5);
 
     private Point? _ultimoArrastre;
     private Point? _inicioDeRegion;
 
     static LienzoDeEvidencia()
     {
-        AffectsRender<LienzoDeEvidencia>(ImagenProperty, TransformacionProperty, RegionProperty, PuntosProperty);
+        AffectsRender<LienzoDeEvidencia>(ImagenProperty, TransformacionProperty, RegionProperty, PuntosProperty, HallazgosProperty);
         ClipToBoundsProperty.OverrideDefaultValue<LienzoDeEvidencia>(true);
         FocusableProperty.OverrideDefaultValue<LienzoDeEvidencia>(true);
     }
@@ -68,6 +78,18 @@ public class LienzoDeEvidencia : Control
         set => SetValue(PuntosProperty, value);
     }
 
+    public IReadOnlyList<HallazgoALaVista>? Hallazgos
+    {
+        get => GetValue(HallazgosProperty);
+        set => SetValue(HallazgosProperty, value);
+    }
+
+    public bool Marcable
+    {
+        get => GetValue(MarcableProperty);
+        set => SetValue(MarcableProperty, value);
+    }
+
     protected VisorViewModel? Visor => DataContext as VisorViewModel;
 
     public override void Render(DrawingContext contexto)
@@ -88,6 +110,14 @@ public class LienzoDeEvidencia : Control
     /// <summary>Para lo que se dibuja sobre la imagen (p. ej. la región que se está marcando).</summary>
     protected virtual void DibujarEncima(DrawingContext contexto, TransformacionDeVista t)
     {
+        foreach (var h in Hallazgos ?? [])
+        {
+            var a = t.ImagenAPantalla(new Punto(h.Region.X, h.Region.Y));
+            var b = t.ImagenAPantalla(new Punto(h.Region.X + h.Region.Ancho, h.Region.Y + h.Region.Alto));
+            contexto.DrawRectangle(null, TrazoDeHallazgo, new Rect(new Point(a.X, a.Y), new Point(b.X, b.Y)));
+            var etiqueta = new FormattedText(h.Etiqueta, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 13, Brushes.Magenta);
+            contexto.DrawText(etiqueta, new Point(a.X, a.Y - 18));
+        }
         if (Region is { } r)
         {
             var a = t.ImagenAPantalla(new Punto(r.X, r.Y));
@@ -123,6 +153,10 @@ public class LienzoDeEvidencia : Control
             _ultimoArrastre = punto.Position;
             e.Pointer.Capture(this);
             e.Handled = true;
+        }
+        else if (!Marcable)
+        {
+            return;
         }
         else if (punto.Properties.IsLeftButtonPressed && Visor?.Modo == ModoDeMarcado.Puntos)
         {

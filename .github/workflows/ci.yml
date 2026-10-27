@@ -71,6 +71,42 @@ jobs:
       # Incluye los hashes dorados del PNG: falla si el entorno de Linux no reproduce byte a byte.
       - run: pytest
 
+  worker-ia:
+    name: Worker de IA (lint + test, en CPU)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/workers/ia
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      # Baja los pesos del manifiesto y verifica su hash: el worker nunca descarga nada por sí mismo.
+      - run: python scripts/descargar_modelos.py
+      - run: pytest
+
+  imagen-worker-ia:
+    name: Imagen del worker de IA (red cortada + Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t forensic-worker-ia:ci src/workers/ia
+      # Con --network none: si intentara bajar un modelo, no arrancaría. Sin GPU en el CI, corre en CPU.
+      - run: src/workers/ia/scripts/verificar_imagen.sh forensic-worker-ia:ci
+      # Se escanea la imagen entera: onnxruntime-gpu, CUDA y cuDNN incluidos.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: forensic-worker-ia:ci
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   imagenes:
     name: Imágenes Docker
     runs-on: ubuntu-latest

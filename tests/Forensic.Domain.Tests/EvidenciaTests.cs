@@ -1,6 +1,8 @@
-using Forensic.Domain.Casos;
+﻿using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
+using System.Text.Json;
 using Forensic.Domain.Evidencias;
+using Forensic.Domain.Ia;
 using Forensic.Domain.Operaciones;
 using static Forensic.Domain.Tests.Fixtures;
 
@@ -10,18 +12,13 @@ public class EvidenciaTests
 {
     private readonly Caso _caso = CasoDeAna();
 
-    /// <summary>Sólo para probar la doble vía: en el catálogo de la Fase 2 no hay operaciones con IA.</summary>
-    private sealed class OperacionConIa : DefinicionDeOperacion
-    {
-        public override string Tipo => "prueba.ia/v1";
-        public override bool UsaIa => true;
-        public override string ParametrosCanonicos => "{}";
-    }
-
     private OperacionForense Operacion(Evidencia entrada, bool usaIa, string salida) =>
-        OperacionForense.Registrar(
-            _caso, entrada, usaIa ? new OperacionConIa() : Recorte.Crear(0, 0, 10, 10), EntornoDePrueba,
-            HashDe(salida), 2048, null, Ana, Ahora.AddMinutes(1));
+        usaIa
+            ? OperacionForense.RegistrarIa(
+                _caso, entrada, CatalogoDeIa.InterpretarOperacion(CatalogoDeIa.SuperResolucion, JsonDocument.Parse("{}").RootElement),
+                RealEsrgan, EntornoDePrueba, HashDe(salida), 2048, Ana, Ahora.AddMinutes(1))
+            : OperacionForense.Registrar(
+                _caso, entrada, Recorte.Crear(0, 0, 10, 10), EntornoDePrueba, HashDe(salida), 2048, null, Ana, Ahora.AddMinutes(1));
 
     [Fact]
     public void Un_original_ingresa_admisible_en_juicio_y_sin_padre()

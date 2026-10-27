@@ -1,5 +1,4 @@
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Forensic.Domain.Comun;
 
 namespace Forensic.Domain.Operaciones;
@@ -11,6 +10,14 @@ namespace Forensic.Domain.Operaciones;
 /// </summary>
 public abstract class DefinicionDeOperacion
 {
+    /// <summary>
+    /// Sólo <see cref="OperacionDeterminista"/> y <see cref="OperacionDeIa"/>, del dominio: no hay una
+    /// tercera vía, ni una operación «de IA» fabricada fuera que se declare de otro modo.
+    /// </summary>
+    private protected DefinicionDeOperacion()
+    {
+    }
+
     public abstract string Tipo { get; }
 
     /// <summary>Si es cierto, el derivado sale de la vía judicial (doble vía).</summary>
@@ -22,33 +29,27 @@ public abstract class DefinicionDeOperacion
 /// <summary>Operación clásica y determinista (OpenCV): el derivado sigue admisible en juicio.</summary>
 public abstract class OperacionDeterminista : DefinicionDeOperacion
 {
+    private protected OperacionDeterminista()
+    {
+    }
+
     public sealed override bool UsaIa => false;
 
     /// <summary>JSON con las claves ordenadas y sin espacios. Sólo enteros y strings: ningún float ambiguo.</summary>
-    protected static string Canonico(params (string Clave, object Valor)[] campos)
+    protected static string Canonico(params (string Clave, object Valor)[] campos) => Json.Canonico(campos);
+}
+
+/// <summary>
+/// Operación con IA (super-resolución, etc.): el derivado es «sólo investigación», siempre. Está
+/// sellado: ninguna subclase puede declararse sin IA para volver a la vía judicial.
+/// </summary>
+public abstract class OperacionDeIa : DefinicionDeOperacion
+{
+    private protected OperacionDeIa()
     {
-        using var buffer = new MemoryStream();
-        using (var w = new Utf8JsonWriter(buffer))
-        {
-            w.WriteStartObject();
-            foreach (var (clave, valor) in campos.OrderBy(c => c.Clave, StringComparer.Ordinal))
-            {
-                switch (valor)
-                {
-                    case int i:
-                        w.WriteNumber(clave, i);
-                        break;
-                    case string s:
-                        w.WriteString(clave, s);
-                        break;
-                    default:
-                        throw new InvalidOperationException($"Tipo de parámetro no canónico: {valor.GetType()}.");
-                }
-            }
-            w.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.ToArray());
     }
+
+    public sealed override bool UsaIa => true;
 }
 
 /// <summary>

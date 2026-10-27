@@ -1,4 +1,4 @@
-namespace Forensic.Cliente.Api;
+﻿namespace Forensic.Cliente.Api;
 
 // Contratos de la API tal como viajan en JSON. Son propios del cliente: no se comparten con el
 // servidor a propósito. Los tests de contrato (tests/Forensic.IntegrationTests) los cruzan con el
@@ -48,9 +48,10 @@ public sealed record ExportDeCustodia(
 /// <param name="Parametros">Los parámetros canónicos tal como quedaron asentados en el servidor.</param>
 public sealed record OperacionAplicadaDto(EvidenciaDto Derivado, Guid OperacionId, string Tipo, string Parametros, string Entorno);
 
+/// <param name="Modelo">El modelo, si la operación es de IA: procedencia, no reproducción.</param>
 public sealed record OperacionDelLinaje(
     long Secuencia, string Tipo, string Parametros, Guid EvidenciaEntradaId, string Entorno, ViaProcesamiento Via,
-    string Actor, DateTimeOffset Timestamp);
+    string Actor, DateTimeOffset Timestamp, ModeloDeIaDto? Modelo = null);
 
 public sealed record ReproduccionDelLinaje(long Secuencia, bool Reproducido, bool EntornoCoincide, string Actor, DateTimeOffset Timestamp);
 
@@ -61,3 +62,21 @@ public sealed record ResultadoDeReproduccion(
     Guid EvidenciaId, bool Reproducido, bool EntornoCoincide,
     string Sha256Esperado, string Sha256Obtenido, string? Sha256PixelesEsperado, string Sha256PixelesObtenido,
     string EntornoAsentado, string EntornoActual);
+
+public sealed record RegionDto(int X, int Y, int Ancho, int Alto);
+
+public sealed record ModeloDeIaDto(string Id, string Version, string Sha256);
+
+/// <summary>
+/// Lo que el modelo reportó: una pista, nunca un dato verificado. <see cref="TextoLeido"/> es lo que el
+/// modelo leyó con <see cref="Confianza"/>, no lo que dice la imagen.
+/// </summary>
+/// <param name="Crudo">El dato crudo del modelo, en JSON tal como lo asentó el servidor.</param>
+public sealed record HallazgoDto(
+    int Orden, RegionDto Region, string? Clase, string? TextoLeido, decimal Confianza, string Crudo, ViaProcesamiento Via);
+
+/// <summary>Un análisis de IA asentado: siempre «sólo investigación».</summary>
+/// <param name="Entorno">Declarado por la workstation que lo corrió: el servidor no lo puede verificar.</param>
+public sealed record AnalisisIaDto(
+    Guid Id, Guid EvidenciaId, string Analisis, string Parametros, ModeloDeIaDto Modelo, string Entorno, string Actor,
+    DateTimeOffset RegistradoEn, ViaProcesamiento Via, IReadOnlyList<HallazgoDto> Hallazgos);

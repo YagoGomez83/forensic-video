@@ -1,20 +1,23 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Forensic.Application.Evidencias;
+using Forensic.Application.Ia;
 using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
+using Forensic.Domain.Ia;
 using Forensic.Domain.Operaciones;
 using Microsoft.Extensions.Logging;
 
 namespace Forensic.Application.Operaciones;
 
 /// <summary>La operación que produjo un eslabón, tal como está en su asiento.</summary>
+/// <param name="Modelo">El modelo, si es una operación de IA (procedencia, no reproducción).</param>
 public sealed record OperacionDelLinaje(
     long Secuencia, string Tipo, string Parametros, Guid EvidenciaEntradaId, string Entorno, ViaProcesamiento Via,
-    string Actor, DateTimeOffset Timestamp);
+    string Actor, DateTimeOffset Timestamp, ModeloDeIaDto? Modelo = null);
 
 public sealed record ReproduccionDelLinaje(long Secuencia, bool Reproducido, bool EntornoCoincide, string Actor, DateTimeOffset Timestamp);
 
@@ -102,13 +105,21 @@ public sealed class ServicioDeOperaciones(
         var eslabones = new List<EslabonDeLinaje>();
         for (Evidencia? e = actual; e is not null; e = e.PadreId is { } padre ? evidencias.GetValueOrDefault(padre) : null)
         {
-            var asiento = cadena.SingleOrDefault(a => a.Tipo == TipoAsiento.OperacionAplicada && a.EvidenciaId == e.Id);
+            var asiento = cadena.SingleOrDefault(a =>
+                (a.Tipo is TipoAsiento.OperacionAplicada or TipoAsiento.OperacionIaAplicada) && a.EvidenciaId == e.Id);
             OperacionDelLinaje? operacion = null;
-            if (asiento is not null)
+            if (asiento?.Tipo == TipoAsiento.OperacionAplicada)
             {
                 var o = OperacionAsentada.Desde(asiento);
                 operacion = new OperacionDelLinaje(
                     asiento.Secuencia, o.Tipo, o.Parametros, o.EvidenciaEntradaId, o.Entorno, o.Via, asiento.Actor, asiento.Timestamp);
+            }
+            else if (asiento?.Tipo == TipoAsiento.OperacionIaAplicada)
+            {
+                var o = OperacionIaAsentada.Desde(asiento);
+                operacion = new OperacionDelLinaje(
+                    asiento.Secuencia, o.Tipo, o.Parametros, o.EvidenciaEntradaId, o.Entorno, o.Via, asiento.Actor, asiento.Timestamp,
+                    new ModeloDeIaDto(o.Modelo.Id, o.Modelo.Version, o.Modelo.Sha256.Hex));
             }
             var reproducciones = cadena
                 .Where(a => a.Tipo == TipoAsiento.OperacionReproducida && a.EvidenciaId == e.Id)
@@ -152,6 +163,10 @@ public sealed class ServicioDeOperaciones(
         if (!verificacion.EsIntegra)
             throw new CadenaComprometidaException(
                 $"La cadena del caso no verifica (asiento {verificacion.SecuenciaRota}: {verificacion.Motivo}); no se reproduce.");
+        if (cadena.SingleOrDefault(a => a.Tipo == TipoAsiento.OperacionIaAplicada && a.EvidenciaId == derivado.Id) is { } deIa)
+            throw new ExcepcionDeDominio(
+                $"La evidencia {evidenciaId} salió de una operación de IA: no se reproduce byte a byte (GPU y modelos no son " +
+                $"deterministas). Su procedencia (modelo, entorno, hashes) está en el asiento {deIa.Secuencia}.");
         var asiento = cadena.SingleOrDefault(a => a.Tipo == TipoAsiento.OperacionAplicada && a.EvidenciaId == derivado.Id)
             ?? throw new ExcepcionDeDominio($"La evidencia {evidenciaId} no tiene un asiento de operación.");
         var asentada = OperacionAsentada.Desde(asiento);

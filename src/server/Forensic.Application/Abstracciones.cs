@@ -3,6 +3,7 @@ using Forensic.Domain.Casos;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
 using Forensic.Domain.Evidencias;
+using Forensic.Domain.Ia;
 using Forensic.Domain.Operaciones;
 
 namespace Forensic.Application;
@@ -23,10 +24,14 @@ public interface IPersistenciaForense
     Task<AsientoDeCustodia?> ObtenerUltimoAsientoAsync(Guid casoId, CancellationToken ct);
     Task<IReadOnlyList<AsientoDeCustodia>> ObtenerCadenaAsync(Guid casoId, CancellationToken ct);
 
+    /// <summary>Análisis de IA de una evidencia, con sus hallazgos en el orden en que los reportó el worker.</summary>
+    Task<IReadOnlyList<AnalisisIa>> ListarAnalisisIaAsync(Guid casoId, Guid evidenciaId, CancellationToken ct);
+
     void Agregar(Caso caso);
     void Agregar(Evidencia evidencia);
     void Agregar(AsientoDeCustodia asiento);
     void Agregar(OperacionForense operacion);
+    void Agregar(AnalisisIa analisis);
 
     /// <summary>
     /// Confirma todos los cambios en una sola transacción. Si otro proceso asentó en la misma
