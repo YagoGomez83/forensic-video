@@ -12,10 +12,19 @@ public sealed class WorkerDeIaReal : IAsyncLifetime
 {
     private const ushort Puerto = 8000;
 
+    /// <summary>
+    /// La imagen queda con este nombre entre corridas: borrarla tiraba el caché de capas y cada corrida
+    /// volvía a bajar varios GB de pip y los pesos. El caché de Docker se invalida por contenido: si cambia
+    /// el Dockerfile, restricciones.txt o el código, se rehace desde esa capa.
+    /// </summary>
+    public const string NombreDeLaImagen = "forensic-worker-ia:tests";
+
     private readonly IFutureDockerImage _imagen = new ImageFromDockerfileBuilder()
         .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), "src/workers/ia")
         .WithDockerfile("Dockerfile")
-        .WithCleanUp(true)
+        .WithName(NombreDeLaImagen)
+        .WithDeleteIfExists(false)
+        .WithCleanUp(false)
         .Build();
 
     private IContainer? _contenedor;
@@ -39,7 +48,7 @@ public sealed class WorkerDeIaReal : IAsyncLifetime
     {
         if (_contenedor is not null)
             await _contenedor.DisposeAsync();
-        await _imagen.DisposeAsync();
+        // La imagen no se libera: se reusa en la próxima corrida (ver NombreDeLaImagen).
     }
 
     /// <summary>Una imagen PNG real (ruido BGR con semilla fija), generada con el OpenCV de la propia imagen.</summary>
