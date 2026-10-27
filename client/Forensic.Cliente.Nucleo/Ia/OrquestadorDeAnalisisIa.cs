@@ -16,4 +16,19 @@ public sealed class OrquestadorDeAnalisisIa(ClienteForense servidor, ClienteWork
         var reporte = await worker.DetectarAsync(contenido, umbralConfianzaMilesimas, ct);
         return await servidor.RegistrarAnalisisIaAsync(casoId, evidenciaId, reporte, ct);
     }
+
+    public async Task<AnalisisIaDto> LeerTextoAsync(
+        Guid casoId, Guid evidenciaId, byte[] contenido, int umbralConfianzaMilesimas, CancellationToken ct)
+    {
+        var reporte = await worker.LeerTextoAsync(contenido, umbralConfianzaMilesimas, ct);
+        return await servidor.RegistrarAnalisisIaAsync(casoId, evidenciaId, reporte, ct);
+    }
+
+    /// <summary>Super-resolución local: el derivado y su reporte van al servidor, que crea el derivado.</summary>
+    public async Task<OperacionAplicadaDto> SuperResolverAsync(
+        Guid casoId, Guid evidenciaId, byte[] contenido, string? nombre, CancellationToken ct)
+    {
+        var (png, reporte) = await worker.SuperResolverAsync(contenido, ct);
+        return await servidor.RegistrarOperacionIaAsync(casoId, evidenciaId, reporte, png, nombre, ct);
+    }
 }

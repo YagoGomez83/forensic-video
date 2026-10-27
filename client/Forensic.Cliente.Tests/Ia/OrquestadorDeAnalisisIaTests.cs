@@ -44,6 +44,62 @@ public class OrquestadorDeAnalisisIaTests
     }
 
     [Fact]
+    public async Task El_ocr_del_worker_local_se_reporta_tal_cual_como_analisis()
+    {
+        const string ocr = """{"analisis": "ia.ocr/v1", "hallazgos": []}""";
+        _worker.En(HttpMethod.Post, "/v1/ocr",
+            _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ocr, Encoding.UTF8, "application/json") });
+        _servidor.En(HttpMethod.Post, RutaDelServidor, HttpStatusCode.Created, AnalisisRegistrado(_evidenciaId));
+
+        var analisis = await Orquestador().LeerTextoAsync(_casoId, _evidenciaId, [1, 2], 600, CancellationToken.None);
+
+        Assert.Equal(_evidenciaId, analisis.EvidenciaId);
+        Assert.Contains("""{"umbralConfianzaMilesimas":600}""", _worker.Cuerpos.Single());
+        Assert.Equal(ocr, _servidor.Cuerpos.Single());
+    }
+
+    [Fact]
+    public async Task La_super_resolucion_local_se_registra_en_el_servidor_con_su_png_y_su_reporte()
+    {
+        const string reporte = """{"operacion":"ia.superresolucion/v1","parametros":{}}""";
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 3];
+        _worker.En(HttpMethod.Post, "/v1/superresolucion", _ =>
+        {
+            var respuesta = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(png) };
+            respuesta.Headers.Add("X-Reporte", reporte);
+            return respuesta;
+        });
+        var derivadoId = Guid.NewGuid();
+        _servidor.En(HttpMethod.Post, $"/casos/{_casoId}/evidencias/{_evidenciaId}/operaciones-ia", HttpStatusCode.Created, new
+        {
+            derivado = new
+            {
+                id = derivadoId, casoId = _casoId, hash = new string('d', 64), tamanoBytes = png.Length, nombreOriginal = "cam1-x4.png",
+                via = "SoloInvestigacion", padreId = _evidenciaId, ingestadaEn = DateTimeOffset.UtcNow, ingestadaPor = "lucia",
+                controlCruzadoPendiente = false,
+            },
+            operacionId = Guid.NewGuid(), tipo = "ia.superresolucion/v1", parametros = "{}", entorno = "{}",
+        });
+
+        var aplicada = await Orquestador().SuperResolverAsync(_casoId, _evidenciaId, [1, 2], "cam1-x4.png", CancellationToken.None);
+
+        Assert.Equal((derivadoId, ViaProcesamiento.SoloInvestigacion), (aplicada.Derivado.Id, aplicada.Derivado.Via));
+        Assert.Contains(reporte, _servidor.Cuerpos.Single());
+        Assert.Contains("cam1-x4.png", _servidor.Cuerpos.Single());
+    }
+
+    [Fact]
+    public async Task Si_la_super_resolucion_falla_no_se_registra_nada_en_el_servidor()
+    {
+        _worker.Inalcanzable = true;
+
+        await Assert.ThrowsAsync<ErrorDeApi>(
+            () => Orquestador().SuperResolverAsync(_casoId, _evidenciaId, [1], null, CancellationToken.None));
+
+        Assert.Empty(_servidor.Peticiones);
+    }
+
+    [Fact]
     public async Task Si_el_worker_falla_no_se_reporta_nada_al_servidor()
     {
         _worker.Inalcanzable = true;

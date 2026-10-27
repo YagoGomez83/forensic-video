@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using Forensic.Cliente.Api;
 using Forensic.Cliente.Tests.Dobles;
+using Forensic.Cliente.Tests.ViewModels;
 
 namespace Forensic.Cliente.Tests.Api;
 
@@ -132,6 +133,34 @@ public class ClienteForenseTests
         var hallazgo = Assert.Single(analisis.Hallazgos);
         Assert.Equal((0.8213145732879639m, "car", new RegionDto(1, 2, 3, 4)), (hallazgo.Confianza, hallazgo.Clase, hallazgo.Region));
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, hallazgo.Via);
+    }
+
+    [Fact]
+    public async Task Una_operacion_de_ia_se_registra_con_el_png_y_el_reporte_tal_cual()
+    {
+        var casoId = CasosViewModelsTests.CasoId;
+        var evidenciaId = Guid.NewGuid();
+        var derivadoId = Guid.NewGuid();
+        const string reporte = """{"operacion":"ia.superresolucion/v1","parametros":{},"salida":{"sha256":"ab"}}""";
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 7];
+        _servidor.En(HttpMethod.Post, $"/casos/{casoId}/evidencias/{evidenciaId}/operaciones-ia", HttpStatusCode.Created, new
+        {
+            derivado = CasosViewModelsTests.Evidencia(derivadoId, evidenciaId, "x4.png", "SoloInvestigacion"),
+            operacionId = Guid.NewGuid(), tipo = "ia.superresolucion/v1", parametros = "{}", entorno = "{}",
+        });
+
+        var aplicada = await Cliente().RegistrarOperacionIaAsync(casoId, evidenciaId, reporte, png, "x4.png", CancellationToken.None);
+
+        Assert.Equal((derivadoId, ViaProcesamiento.SoloInvestigacion), (aplicada.Derivado.Id, aplicada.Derivado.Via));
+        var cuerpo = _servidor.Cuerpos.Single()!;
+        Assert.Equal("multipart/form-data", _servidor.Peticiones.Single().Content!.Headers.ContentType!.MediaType);
+        Assert.Contains("name=reporte", cuerpo);
+        Assert.Contains(reporte, cuerpo);
+        Assert.Contains("name=salida", cuerpo);
+        Assert.Contains("name=nombre", cuerpo);
+        Assert.Contains("x4.png", cuerpo);
+        var bytes = _servidor.Bytes.Single()!;
+        Assert.Contains(Enumerable.Range(0, bytes.Length - png.Length + 1), i => bytes.AsSpan(i, png.Length).SequenceEqual(png));
     }
 
     [Fact]

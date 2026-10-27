@@ -34,18 +34,48 @@ public sealed class ClienteWorkerIa
     /// </summary>
     public async Task<string> DetectarAsync(byte[] imagen, int umbralConfianzaMilesimas, CancellationToken ct)
     {
+        using var respuesta = await EnviarAsync("v1/detectar", imagen, ConUmbral(umbralConfianzaMilesimas), ct);
+        return await respuesta.Content.ReadAsStringAsync(ct);
+    }
+
+    /// <summary>OCR sobre la imagen en crudo, con los mismos parámetros que la detección. Respuesta tal cual.</summary>
+    public async Task<string> LeerTextoAsync(byte[] imagen, int umbralConfianzaMilesimas, CancellationToken ct)
+    {
+        using var respuesta = await EnviarAsync("v1/ocr", imagen, ConUmbral(umbralConfianzaMilesimas), ct);
+        return await respuesta.Content.ReadAsStringAsync(ct);
+    }
+
+    /// <summary>
+    /// Super-resolución x4: el derivado PNG y su reporte (la cabecera X-Reporte), los dos tal cual. Sin
+    /// reporte el derivado no tiene procedencia y no se acepta.
+    /// </summary>
+    public async Task<(byte[] Png, string Reporte)> SuperResolverAsync(byte[] imagen, CancellationToken ct)
+    {
+        using var respuesta = await EnviarAsync("v1/superresolucion", imagen, "{}", ct);
+        if (!respuesta.Headers.TryGetValues("X-Reporte", out var reporte))
+            throw new ErrorDeApi(TipoDeError.WorkerNoDisponible, respuesta.StatusCode,
+                "El worker de IA devolvió un derivado sin su reporte (X-Reporte): no tiene procedencia y no se registra.");
+        return (await respuesta.Content.ReadAsByteArrayAsync(ct), reporte.Single());
+    }
+
+    private static string ConUmbral(int umbralConfianzaMilesimas) =>
+        $$"""{"umbralConfianzaMilesimas":{{umbralConfianzaMilesimas}}}""";
+
+    /// <summary>Manda la imagen en crudo con sus parámetros; devuelve la respuesta sólo si fue exitosa.</summary>
+    private async Task<HttpResponseMessage> EnviarAsync(string ruta, byte[] imagen, string parametros, CancellationToken ct)
+    {
         var entrada = new ByteArrayContent(imagen);
         entrada.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var formulario = new MultipartFormDataContent
         {
-            { new StringContent($$"""{"umbralConfianzaMilesimas":{{umbralConfianzaMilesimas}}}""", Encoding.UTF8), "parametros" },
+            { new StringContent(parametros, Encoding.UTF8), "parametros" },
             { entrada, "entrada", "entrada" },
         };
 
         HttpResponseMessage respuesta;
         try
         {
-            respuesta = await _http.PostAsync("v1/detectar", formulario, ct);
+            respuesta = await _http.PostAsync(ruta, formulario, ct);
         }
         catch (HttpRequestException ex)
         {
@@ -54,10 +84,10 @@ public sealed class ClienteWorkerIa
                 "(docker compose --profile workstation up -d worker-ia).", ex);
         }
 
+        if (respuesta.IsSuccessStatusCode)
+            return respuesta;
         using (respuesta)
         {
-            if (respuesta.IsSuccessStatusCode)
-                return await respuesta.Content.ReadAsStringAsync(ct);
             var detalle = await ClienteForense.DetalleAsync(respuesta, ct);
             throw respuesta.StatusCode == HttpStatusCode.UnprocessableEntity
                 ? new ErrorDeApi(TipoDeError.Rechazado, respuesta.StatusCode, detalle ?? "El worker de IA rechazó la imagen.")

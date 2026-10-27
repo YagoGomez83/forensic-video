@@ -32,6 +32,66 @@ public class ClienteWorkerIaTests
         Assert.True(ContieneSecuencia(_worker.Bytes.Single()!, imagen));
     }
 
+    [Fact]
+    public async Task Leer_texto_manda_la_imagen_en_crudo_con_el_umbral_y_devuelve_la_respuesta_tal_cual()
+    {
+        const string ocr = """{"analisis": "ia.ocr/v1", "hallazgos": [{"texto": "ABC 123", "confianza": 0.9113}]}""";
+        _worker.En(HttpMethod.Post, "/v1/ocr", _ => Json(HttpStatusCode.OK, ocr));
+        byte[] imagen = [0x89, 0x50, 0x4E, 0x47, 4, 5, 6];
+
+        var reporte = await Worker().LeerTextoAsync(imagen, 700, CancellationToken.None);
+
+        Assert.Equal(ocr, reporte);
+        var cuerpo = _worker.Cuerpos.Single()!;
+        Assert.Contains("""{"umbralConfianzaMilesimas":700}""", cuerpo);
+        Assert.True(ContieneSecuencia(_worker.Bytes.Single()!, imagen));
+    }
+
+    [Fact]
+    public async Task Super_resolver_devuelve_el_png_y_el_reporte_de_la_cabecera_tal_cual()
+    {
+        const string cabecera = """{"operacion":"ia.superresolucion/v1","parametros":{},"salida":{"sha256":"ab"}}""";
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 9];
+        _worker.En(HttpMethod.Post, "/v1/superresolucion", _ =>
+        {
+            var respuesta = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(png) };
+            respuesta.Headers.Add("X-Reporte", cabecera);
+            return respuesta;
+        });
+        byte[] imagen = [1, 2, 3];
+
+        var (derivado, reporte) = await Worker().SuperResolverAsync(imagen, CancellationToken.None);
+
+        Assert.Equal(png, derivado);
+        Assert.Equal(cabecera, reporte);
+        Assert.Contains("name=parametros", _worker.Cuerpos.Single()!);
+        Assert.Contains("{}", _worker.Cuerpos.Single()!);
+        Assert.True(ContieneSecuencia(_worker.Bytes.Single()!, imagen));
+    }
+
+    [Fact]
+    public async Task Un_derivado_sin_reporte_no_tiene_procedencia_y_no_se_acepta()
+    {
+        _worker.En(HttpMethod.Post, "/v1/superresolucion",
+            _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([0x89, 0x50]) });
+
+        var ex = await Assert.ThrowsAsync<ErrorDeApi>(() => Worker().SuperResolverAsync([1], CancellationToken.None));
+
+        Assert.Equal(TipoDeError.WorkerNoDisponible, ex.Tipo);
+        Assert.Contains("X-Reporte", ex.Message);
+    }
+
+    [Fact]
+    public async Task Un_rechazo_de_la_super_resolucion_muestra_el_detalle_del_worker()
+    {
+        _worker.En(HttpMethod.Post, "/v1/superresolucion",
+            _ => Json(HttpStatusCode.UnprocessableEntity, """{"detail": "La imagen es multipágina."}"""));
+
+        var ex = await Assert.ThrowsAsync<ErrorDeApi>(() => Worker().SuperResolverAsync([1], CancellationToken.None));
+
+        Assert.Equal((TipoDeError.Rechazado, "La imagen es multipágina."), (ex.Tipo, ex.Message));
+    }
+
     [Theory]
     [InlineData("http://192.168.0.10:8100/")]
     [InlineData("http://worker-ia:8100/")]
