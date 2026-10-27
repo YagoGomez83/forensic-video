@@ -1,6 +1,5 @@
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using DotNet.Testcontainers.Images;
 
 namespace Forensic.IntegrationTests;
 
@@ -12,11 +11,8 @@ public sealed class WorkerDeIngestaReal : IAsyncLifetime
 {
     private const ushort Puerto = 8000;
 
-    private readonly IFutureDockerImage _imagen = new ImageFromDockerfileBuilder()
-        .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), "src/workers/ingest")
-        .WithDockerfile("Dockerfile")
-        .WithCleanUp(true)
-        .Build();
+    /// <summary>Se reusa entre corridas (ver <see cref="ImagenesDeWorkers"/>).</summary>
+    public const string NombreDeLaImagen = "forensic-worker-ingesta:tests";
 
     private IContainer? _contenedor;
 
@@ -26,8 +22,8 @@ public sealed class WorkerDeIngestaReal : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await _imagen.CreateAsync();
-        _contenedor = new ContainerBuilder(_imagen)
+        var imagen = await ImagenesDeWorkers.ConstruirAsync("src/workers/ingest", NombreDeLaImagen);
+        _contenedor = new ContainerBuilder(imagen)
             .WithPortBinding(Puerto, assignRandomHostPort: true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(Puerto).ForPath("/salud")))
             .Build();
@@ -38,7 +34,7 @@ public sealed class WorkerDeIngestaReal : IAsyncLifetime
     {
         if (_contenedor is not null)
             await _contenedor.DisposeAsync();
-        await _imagen.DisposeAsync();
+        // La imagen no se libera: se reusa en la próxima corrida (ver ImagenesDeWorkers).
     }
 
     /// <summary>Genera un video MP4 real con el ffmpeg de la propia imagen y devuelve sus bytes.</summary>
