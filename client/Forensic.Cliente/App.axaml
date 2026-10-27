@@ -16,5 +16,20 @@
       <Setter Property="Foreground" Value="#8D6E00" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
+    <!-- Lo tocado por IA: nunca admisible en juicio. Se ve igual en todas las pantallas. -->
+    <Style Selector="TextBlock.soloInvestigacion">
+      <Setter Property="Foreground" Value="#C62828" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Border.soloInvestigacion">
+      <Setter Property="Background" Value="#FDECEA" />
+      <Setter Property="BorderBrush" Value="#C62828" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+    <Style Selector="Border.soloInvestigacion TextBlock">
+      <Setter Property="Foreground" Value="#B71C1C" />
+    </Style>
   </Application.Styles>
 </Application>
