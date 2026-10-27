@@ -78,11 +78,49 @@ public class AnalisisIaTests
     {
         var leido = HallazgoPropuesto.Texto(RegionDeImagen.Crear(0, 0, 80, 20), "ABC123", 0.82m, """{"texto":"ABC123"}""");
 
-        var hallazgo = Registrar(Original(_caso), [leido]).Hallazgos.Single();
+        var hallazgo = RegistrarOcr(Original(_caso), [leido]).Hallazgos.Single();
 
         Assert.Equal("ABC123", hallazgo.TextoLeido);
         Assert.Null(hallazgo.Clase);
         Assert.Equal(0.82m, hallazgo.Confianza);
+    }
+
+    private static readonly ModeloDeIa PpOcr =
+        new("ppocrv4-en", "PP-OCRv4", HashSha256.Parse("3d37f552dfc2354511c40cd5b68793129ce54222aa2279bf4a54dcdee9cf134f"));
+
+    private AnalisisIa RegistrarOcr(Evidencia entrada, IReadOnlyList<HallazgoPropuesto> hallazgos) =>
+        AnalisisIa.Registrar(
+            _caso, entrada, CatalogoDeIa.Interpretar(CatalogoDeIa.Ocr, Json("""{"umbralConfianzaMilesimas":500}""")), PpOcr,
+            EntornoDeGpu, entrada.Hash, hallazgos, Ana, Ahora.AddMinutes(5));
+
+    private static HallazgoPropuesto Leido(string texto = "ABC123") =>
+        HallazgoPropuesto.Texto(RegionDeImagen.Crear(0, 0, 80, 20), texto, 0.82m, """{"caracteres":[]}""");
+
+    [Fact]
+    public void Un_ocr_registra_lo_que_el_modelo_leyo_como_solo_investigacion()
+    {
+        var analisis = RegistrarOcr(Original(_caso), [Leido(), Leido("XYZ789")]);
+
+        Assert.Equal(CatalogoDeIa.Ocr, analisis.Tipo);
+        Assert.Equal(PpOcr, analisis.Modelo);
+        Assert.Equal(["ABC123", "XYZ789"], analisis.Hallazgos.Select(h => h.TextoLeido));
+        Assert.All(analisis.Hallazgos, h => Assert.Equal(ViaProcesamiento.SoloInvestigacion, h.Via));
+    }
+
+    [Fact]
+    public void Cada_analisis_produce_su_tipo_de_hallazgo()
+    {
+        // Una detección no «lee» texto, y un OCR no clasifica objetos.
+        Assert.Throws<ExcepcionDeDominio>(() => Registrar(Original(_caso), [Auto(), Leido()]));
+        Assert.Throws<ExcepcionDeDominio>(() => RegistrarOcr(Original(_caso), [Leido(), Auto()]));
+    }
+
+    [Fact]
+    public void El_ocr_usa_su_propio_modelo()
+    {
+        Assert.Throws<ExcepcionDeDominio>(() => AnalisisIa.Registrar(
+            _caso, Original(_caso), CatalogoDeIa.Interpretar(CatalogoDeIa.Ocr, Json("""{"umbralConfianzaMilesimas":500}""")), Yolox,
+            EntornoDeGpu, Original(_caso).Hash, [Leido()], Ana, Ahora));
     }
 
     [Fact]
@@ -275,8 +313,8 @@ public class AnalisisIaTests
     public void El_asiento_lleva_la_procedencia_completa_y_cada_hallazgo_con_su_dato_crudo_exacto()
     {
         var original = Original(_caso);
-        var leido = HallazgoPropuesto.Texto(RegionDeImagen.Crear(1, 2, 3, 4), "ABC123", 0.82m, """{"texto": "ABC123"}""");
-        var analisis = Registrar(original, [Auto(), leido]);
+        var otro = HallazgoPropuesto.Deteccion(RegionDeImagen.Crear(1, 2, 3, 4), "person", 0.82m, """{"clase": 0}""");
+        var analisis = Registrar(original, [Auto(), otro]);
 
         var detalle = analisis.DetalleDeAsiento();
 
@@ -305,12 +343,23 @@ public class AnalisisIaTests
         Assert.False(hallazgos[0].TryGetProperty("textoLeido", out _));
         Assert.Equal("0.8213", hallazgos[0].GetProperty("confianza").GetRawText());
         Assert.Equal(Crudo, hallazgos[0].GetProperty("crudo").GetRawText());
-        Assert.Equal("ABC123", hallazgos[1].GetProperty("textoLeido").GetString());
-        Assert.False(hallazgos[1].TryGetProperty("clase", out _));
-        Assert.Equal("""{"texto": "ABC123"}""", hallazgos[1].GetProperty("crudo").GetRawText());
+        Assert.Equal("person", hallazgos[1].GetProperty("clase").GetString());
+        Assert.Equal("""{"clase": 0}""", hallazgos[1].GetProperty("crudo").GetRawText());
         var region = hallazgos[1].GetProperty("region");
         Assert.Equal((1, 2, 3, 4), (region.GetProperty("x").GetInt32(), region.GetProperty("y").GetInt32(),
             region.GetProperty("ancho").GetInt32(), region.GetProperty("alto").GetInt32()));
+    }
+
+    [Fact]
+    public void El_asiento_de_un_ocr_lleva_el_texto_leido_y_no_una_clase()
+    {
+        var detalle = RegistrarOcr(Original(_caso), [Leido()]).DetalleDeAsiento();
+
+        using var doc = JsonDocument.Parse(detalle);
+        var hallazgo = doc.RootElement.GetProperty("hallazgos")[0];
+        Assert.Equal(CatalogoDeIa.Ocr, doc.RootElement.GetProperty("analisis").GetString());
+        Assert.Equal("ABC123", hallazgo.GetProperty("textoLeido").GetString());
+        Assert.False(hallazgo.TryGetProperty("clase", out _));
     }
 
     [Fact]

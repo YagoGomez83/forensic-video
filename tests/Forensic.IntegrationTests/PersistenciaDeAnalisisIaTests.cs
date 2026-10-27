@@ -32,16 +32,17 @@ public class PersistenciaDeAnalisisIaTests(ServidorForense servidor) : IClassFix
         return (caso.Id, original);
     }
 
-    private async Task<AnalisisIa> RegistrarAsync(Guid casoId, Guid evidenciaId, IReadOnlyList<HallazgoPropuesto> hallazgos)
+    private async Task<AnalisisIa> RegistrarAsync(
+        Guid casoId, Guid evidenciaId, IReadOnlyList<HallazgoPropuesto> hallazgos, string tipo = CatalogoDeIa.Deteccion)
     {
         using var scope = servidor.Services.CreateScope();
         var persistencia = scope.ServiceProvider.GetRequiredService<IPersistenciaForense>();
         var caso = (await persistencia.ObtenerCasoAsync(casoId, default))!;
         var evidencia = (await persistencia.ObtenerEvidenciaAsync(casoId, evidenciaId, default))!;
         var definicion = CatalogoDeIa.Interpretar(
-            CatalogoDeIa.Deteccion, System.Text.Json.JsonDocument.Parse("""{"umbralConfianzaMilesimas":500}""").RootElement);
+            tipo, System.Text.Json.JsonDocument.Parse("""{"umbralConfianzaMilesimas":500}""").RootElement);
         var analisis = AnalisisIa.Registrar(
-            caso, evidencia, definicion, CatalogoDeIa.Modelos(CatalogoDeIa.Deteccion)[0], Entorno, evidencia.Hash,
+            caso, evidencia, definicion, CatalogoDeIa.Modelos(tipo)[0], Entorno, evidencia.Hash,
             hallazgos, Ana, DateTimeOffset.UtcNow);
         var ultimo = await persistencia.ObtenerUltimoAsientoAsync(casoId, default);
         persistencia.Agregar(analisis);
@@ -65,8 +66,8 @@ public class PersistenciaDeAnalisisIaTests(ServidorForense servidor) : IClassFix
     public async Task Se_guarda_con_sus_hallazgos_y_su_asiento_y_se_relee_exacto()
     {
         var (casoId, original) = await CasoConOriginalAsync();
-        var leido = HallazgoPropuesto.Texto(RegionDeImagen.Crear(1, 2, 80, 20), "ABC123", 0.82m, """{"texto":"ABC123"}""");
-        var registrado = await RegistrarAsync(casoId, original.Id, [Auto(0.82131439m), leido]);
+        var persona = HallazgoPropuesto.Deteccion(RegionDeImagen.Crear(1, 2, 80, 20), "person", 0.82m, """{"clase":0}""");
+        var registrado = await RegistrarAsync(casoId, original.Id, [Auto(0.82131439m), persona]);
 
         using var scope = servidor.Services.CreateScope();
         var persistencia = scope.ServiceProvider.GetRequiredService<IPersistenciaForense>();
@@ -89,15 +90,30 @@ public class PersistenciaDeAnalisisIaTests(ServidorForense servidor) : IClassFix
             },
             h =>
             {
-                Assert.Equal("ABC123", h.TextoLeido);
-                Assert.Null(h.Clase);
+                Assert.Equal("person", h.Clase);
                 Assert.Equal(0.82m, h.Confianza);
+                Assert.Equal(RegionDeImagen.Crear(1, 2, 80, 20), h.Region);
             });
 
         var cadena = await persistencia.ObtenerCadenaAsync(casoId, default);
         Assert.Equal(TipoAsiento.HallazgosRegistrados, cadena[^1].Tipo);
         Assert.Equal(registrado.DetalleDeAsiento(), cadena[^1].Detalle);
         Assert.True(RegistroDeCustodia.Verificar(casoId, cadena).EsIntegra);
+    }
+
+    [Fact]
+    public async Task Un_ocr_se_guarda_con_el_texto_leido_y_sin_clase()
+    {
+        var (casoId, original) = await CasoConOriginalAsync();
+        var leido = HallazgoPropuesto.Texto(RegionDeImagen.Crear(1, 2, 80, 20), "ABC123", 0.82m, """{"caracteres":[]}""");
+        await RegistrarAsync(casoId, original.Id, [leido], CatalogoDeIa.Ocr);
+
+        using var scope = servidor.Services.CreateScope();
+        var analisis = Assert.Single(await scope.ServiceProvider.GetRequiredService<IPersistenciaForense>()
+            .ListarAnalisisIaAsync(casoId, original.Id, default));
+        var h = Assert.Single(analisis.Hallazgos);
+        Assert.Equal((CatalogoDeIa.Ocr, "ABC123", (string?)null, 0.82m), (analisis.Tipo, h.TextoLeido, h.Clase, h.Confianza));
+        Assert.Equal(CatalogoDeIa.Modelos(CatalogoDeIa.Ocr)[0], analisis.Modelo);
     }
 
     [Fact]

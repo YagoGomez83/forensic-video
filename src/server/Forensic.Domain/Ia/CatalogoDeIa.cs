@@ -17,6 +17,7 @@ public sealed record DefinicionDeAnalisisIa(string Tipo, string ParametrosCanoni
 public static class CatalogoDeIa
 {
     public const string Deteccion = "ia.deteccion/v1";
+    public const string Ocr = "ia.ocr/v1";
     public const string SuperResolucion = SuperResolucionX4.TipoVersionado;
 
     public const int UmbralMinimoMilesimas = 1;
@@ -25,12 +26,17 @@ public static class CatalogoDeIa
     private static readonly ModeloDeIa Yolox =
         new("yolox-s", "0.1.1rc0", HashSha256.Parse("c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"));
 
+    /// <summary>Compuesto (detección, reconocimiento, diccionario): el hash es el de la lista de componentes.</summary>
+    private static readonly ModeloDeIa PpOcr =
+        new("ppocrv4-en", "PP-OCRv4", HashSha256.Parse("3d37f552dfc2354511c40cd5b68793129ce54222aa2279bf4a54dcdee9cf134f"));
+
     private static readonly ModeloDeIa RealEsrgan =
         new("realesrgan-x4plus", "v0.1.0", HashSha256.Parse("1b21f3442cb75a7f76ae99cb7742a84510d14f428a6b2d3d8960440f7235a0bc"));
 
     private static readonly Dictionary<string, ModeloDeIa[]> ModelosPermitidos = new()
     {
         [Deteccion] = [Yolox],
+        [Ocr] = [PpOcr],
         [SuperResolucion] = [RealEsrgan],
     };
 
@@ -43,10 +49,13 @@ public static class CatalogoDeIa
 
     public static IReadOnlyList<ModeloDeIa> Modelos(string tipo) => ExigirTipo(tipo);
 
-    /// <summary>Un análisis (produce hallazgos, no un derivado).</summary>
+    /// <summary>Si el análisis lee texto (OCR) en vez de clasificar objetos (detección).</summary>
+    public static bool LeeTexto(string tipo) => tipo == Ocr;
+
+    /// <summary>Un análisis (produce hallazgos, no un derivado). Detección y OCR: umbral en milésimas.</summary>
     public static DefinicionDeAnalisisIa Interpretar(string tipo, JsonElement parametros)
     {
-        if (tipo != Deteccion)
+        if (tipo is not (Deteccion or Ocr))
             throw new ExcepcionDeDominio($"'{tipo}' no es un análisis de IA del catálogo.");
         var lector = new LectorDeParametros(tipo, parametros);
         var umbral = lector.Entero("umbralConfianzaMilesimas");

@@ -67,8 +67,8 @@ public class AnalisisIaTests(ServidorForense servidor) : IClassFixture<ServidorF
     public async Task Registrar_asienta_la_procedencia_y_los_hallazgos_como_solo_investigacion()
     {
         var (casoId, original) = await CasoConOriginalAsync();
-        var leido = """{"region": {"x": 1, "y": 2, "ancho": 80, "alto": 20}, "textoLeido": "ABC123", "confianza": 0.82, "crudo": {"texto": "ABC123"}}""";
-        var hallazgos = $$"""[{"region": {"x": 34, "y": 18, "ancho": 17, "alto": 9}, "clase": "car", "confianza": 0.8213145732879639, "crudo": {{CrudoAuto}}}, {{leido}}]""";
+        var persona = """{"region": {"x": 1, "y": 2, "ancho": 80, "alto": 20}, "clase": "person", "confianza": 0.82, "crudo": {"clase": 0}}""";
+        var hallazgos = $$"""[{"region": {"x": 34, "y": 18, "ancho": 17, "alto": 9}, "clase": "car", "confianza": 0.8213145732879639, "crudo": {{CrudoAuto}}}, {{persona}}]""";
 
         var r = await RegistrarAsync(_ana, casoId, original.Id, Reporte(original.Hash, hallazgos));
 
@@ -94,8 +94,7 @@ public class AnalisisIaTests(ServidorForense servidor) : IClassFixture<ServidorF
             },
             h =>
             {
-                Assert.Equal("ABC123", h.TextoLeido);
-                Assert.Null(h.Clase);
+                Assert.Equal("person", h.Clase);
                 Assert.Equal(0.82m, h.Confianza);
             });
 
@@ -111,6 +110,43 @@ public class AnalisisIaTests(ServidorForense servidor) : IClassFixture<ServidorF
         var listados = await ListarAsync(_ana, casoId, original.Id);
         Assert.Equal(analisis.Id, Assert.Single(listados).Id);
         Assert.Equal(analisis.Hallazgos, listados[0].Hallazgos);
+    }
+
+    private const string PpOcrSha256 = "3d37f552dfc2354511c40cd5b68793129ce54222aa2279bf4a54dcdee9cf134f";
+
+    private const string LeidoAbc123 =
+        """[{"region": {"x": 1, "y": 2, "ancho": 80, "alto": 20}, "textoLeido": "ABC123", "confianza": 0.82, "crudo": {"caracteres": []}}]""";
+
+    [Fact]
+    public async Task Un_ocr_asienta_lo_que_el_modelo_leyo()
+    {
+        var (casoId, original) = await CasoConOriginalAsync();
+
+        var r = await RegistrarAsync(_ana, casoId, original.Id,
+            Reporte(original.Hash, LeidoAbc123, analisis: CatalogoDeIa.Ocr, modelo: "ppocrv4-en", version: "PP-OCRv4", sha256Modelo: PpOcrSha256));
+
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var analisis = await r.LeerAsync<AnalisisIaDto>();
+        Assert.Equal(CatalogoDeIa.Ocr, analisis.Analisis);
+        var h = Assert.Single(analisis.Hallazgos);
+        Assert.Equal(("ABC123", (string?)null, ViaProcesamiento.SoloInvestigacion), (h.TextoLeido, h.Clase, h.Via));
+        Assert.Contains("\"textoLeido\":\"ABC123\"", (await _ana.ExportarAsync(casoId)).Asientos[^1].Detalle);
+    }
+
+    [Fact]
+    public async Task Cada_analisis_produce_su_tipo_de_hallazgo_y_usa_su_modelo()
+    {
+        var (casoId, original) = await CasoConOriginalAsync();
+        var antes = (await _ana.ExportarAsync(casoId)).Asientos.Count;
+
+        // Una detección que «lee» texto, un OCR con la clase de un objeto, y un OCR con el modelo de la detección.
+        var deteccionConTexto = Reporte(original.Hash, LeidoAbc123);
+        var ocrConClase = Reporte(original.Hash, analisis: CatalogoDeIa.Ocr, modelo: "ppocrv4-en", version: "PP-OCRv4", sha256Modelo: PpOcrSha256);
+        var ocrConYolox = Reporte(original.Hash, LeidoAbc123, analisis: CatalogoDeIa.Ocr);
+
+        foreach (var reporte in new[] { deteccionConTexto, ocrConClase, ocrConYolox })
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await RegistrarAsync(_ana, casoId, original.Id, reporte)).StatusCode);
+        Assert.Equal(antes, (await _ana.ExportarAsync(casoId)).Asientos.Count);
     }
 
     [Fact]

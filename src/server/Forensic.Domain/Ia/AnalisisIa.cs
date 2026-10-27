@@ -80,6 +80,11 @@ public sealed class AnalisisIa
         if (hashEntradaDeclarado != entrada.Hash)
             throw new ExcepcionDeDominio(
                 $"El worker analizó otro contenido ({hashEntradaDeclarado}), no la evidencia {entrada.Id} ({entrada.Hash}).");
+        var leeTexto = CatalogoDeIa.LeeTexto(definicion.Tipo);
+        if (hallazgos.Any(h => (h.TextoLeido is not null) != leeTexto))
+            throw new ExcepcionDeDominio(leeTexto
+                ? $"Un análisis '{definicion.Tipo}' sólo produce texto leído, no clases."
+                : $"Un análisis '{definicion.Tipo}' sólo produce clases de objetos, no texto leído.");
         if (hallazgos.Count > MaximoHallazgos)
             throw new ExcepcionDeDominio($"Un análisis admite hasta {MaximoHallazgos} hallazgos.");
         if (entorno.Length > LongitudMaximaEntorno)
