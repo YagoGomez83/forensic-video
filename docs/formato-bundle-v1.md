@@ -62,7 +62,7 @@ concatenados en el orden indicado, y el resultado en UTF-8. El prefijo de longit
   ],
   "evidencias": [
     { "id": "…", "sha256": "…", "tamanoBytes": 524288, "nombre": "foto.jpg",
-      "asientoDeOrigen": 2, "embebida": true, "ruta": "evidencias/<sha256>" },
+      "asientoDeOrigen": 2, "embebida": true, "ruta": "evidencias/<id>.jpg" },
     { "id": "…", "sha256": "…", "tamanoBytes": 4800000000, "nombre": "dvr.mp4",
       "asientoDeOrigen": 3, "embebida": false, "ruta": null }
   ]
@@ -75,7 +75,7 @@ concatenados en el orden indicado, y el resultado en UTF-8. El prefijo de longit
 - `archivos` lista todos los archivos embebidos que no son evidencia.
 - `evidencias` lista cada evidencia que el informe presenta:
   - `asientoDeOrigen` es la secuencia del asiento que la registró: `EvidenciaIngestada` si es un original, `OperacionAplicada` (u `OperacionIaAplicada`, sólo en un bundle investigativo) si es un derivado.
-  - Si `embebida` es `true`, el archivo viaja en `ruta`.
+  - Si `embebida` es `true`, el archivo viaja en `ruta`: `evidencias/<id>`, con la extensión del nombre declarado si es simple (por eso la ruta es única aunque dos evidencias tengan el mismo contenido). La ruta no dice nada sobre el contenido: lo que vale es el hash.
   - Si es `false`, el archivo superó el umbral de tamaño del servidor y viaja aparte. El verificador lo busca **por su hash**, no por su nombre, en la carpeta que se le indique. `nombre` es el nombre declarado en la ingesta: dato no confiable, nunca una ruta.
 
 ## `cadena.json`

@@ -102,7 +102,8 @@ public sealed class AsientoDeCustodia
         return HashSha256.Calcular(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
-    internal static string TimestampCanonico(DateTimeOffset instante) =>
+    /// <summary>El timestamp como entra al hash: UTC con seis decimales.</summary>
+    public static string TimestampCanonico(DateTimeOffset instante) =>
         instante.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", CultureInfo.InvariantCulture);
 
     internal static void Campo(StringBuilder sb, string nombre, string valor) =>

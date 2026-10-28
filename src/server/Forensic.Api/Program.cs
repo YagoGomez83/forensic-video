@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAplicacion();
 builder.Services.AddInfraestructura(builder.Configuration);
 builder.Services.AddOptions<OpcionesIngesta>().Bind(builder.Configuration.GetSection(OpcionesIngesta.Seccion));
+builder.Services.AddOptions<OpcionesDeInformes>().Bind(builder.Configuration.GetSection(OpcionesDeInformes.Seccion));
 
 // Sin clave de firma (o con una corta) el servidor no arranca: ParametrosDeValidacion lanza.
 var jwt = builder.Configuration.GetSection(OpcionesJwt.Seccion).Get<OpcionesJwt>() ?? new OpcionesJwt();

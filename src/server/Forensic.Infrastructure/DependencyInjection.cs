@@ -3,7 +3,9 @@ using Forensic.Application.Custodia;
 using Forensic.Application.Identidad;
 using Forensic.Application.Operaciones;
 using Forensic.Infrastructure.Almacen;
+using Forensic.Application.Informes;
 using Forensic.Infrastructure.Identidad;
+using Forensic.Infrastructure.Informes;
 using Forensic.Infrastructure.Persistencia;
 using Forensic.Infrastructure.Sellado;
 using Forensic.Infrastructure.Workers;
@@ -46,6 +48,8 @@ public static class DependencyInjection
             FirmanteEd25519.DesdeArchivo(sp.GetRequiredService<IOptions<OpcionesSellado>>().Value.RutaClavePrivada));
         services.AddSingleton<IAlmacenDeSellos, AlmacenDeSellosEnDisco>();
         services.AddHostedService<SelladorPeriodico>();
+
+        services.AddSingleton<IRedactorDeInformes, RedactorDePdf>();
 
         services.AddOptions<OpcionesWorkerIngesta>().Bind(configuration.GetSection(OpcionesWorkerIngesta.Seccion));
         services.AddHttpClient<IWorkerDeIngesta, WorkerDeIngestaHttp>((sp, http) =>

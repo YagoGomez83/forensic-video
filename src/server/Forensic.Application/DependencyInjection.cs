@@ -3,6 +3,7 @@ using Forensic.Application.Custodia;
 using Forensic.Application.Evidencias;
 using Forensic.Application.Ia;
 using Forensic.Application.Identidad;
+using Forensic.Application.Informes;
 using Forensic.Application.Operaciones;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,6 +20,8 @@ public static class DependencyInjection
         services.AddScoped<ServicioDeCustodia>();
         services.AddScoped<ServicioDeSellado>();
         services.AddScoped<VerificadorDeCadena>();
+        services.AddScoped<ServicioDeInformePericial>();
+        services.AddScoped<ConsultaDeInformes>();
         services.AddScoped<ServicioDeIdentidad>();
         services.AddScoped<ServicioDeOperaciones>();
         services.AddScoped<ServicioDeAnalisisIa>();

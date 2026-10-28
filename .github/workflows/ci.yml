@@ -17,6 +17,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      # Los tests del informe pericial compilan y corren el verificador independiente (Go).
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
       - run: dotnet restore src/server/Forensic.sln
       - run: dotnet build src/server/Forensic.sln -c Release --no-restore
       # Los tests de integración levantan PostgreSQL con Testcontainers (Docker viene en el runner).

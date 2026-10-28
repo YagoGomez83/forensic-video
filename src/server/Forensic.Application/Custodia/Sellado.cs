@@ -58,6 +58,13 @@ public sealed class ServicioDeSellado(
         return agregados;
     }
 
+    /// <summary>
+    /// Sella esta cabeza si todavía no está sellada. Lo usa la emisión de un informe, sobre una cadena
+    /// que ya verificó <see cref="VerificadorDeCadena"/>: el bundle tiene que traer el sello de su cabeza.
+    /// </summary>
+    public async Task SellarCabezaAsync(AsientoDeCustodia cabeza, CancellationToken ct) =>
+        await almacen.AgregarAsync(SelloDeCadena.Sellar(cabeza, reloj.GetUtcNow(), firmante.ClaveId, firmante.Firmar), ct);
+
     private async Task<bool> SellarSiHaceFaltaAsync(Guid casoId, CancellationToken ct)
     {
         var cadena = await persistencia.ObtenerCadenaAsync(casoId, ct);

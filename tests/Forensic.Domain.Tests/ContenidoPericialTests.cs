@@ -127,6 +127,19 @@ public class ContenidoPericialTests
     }
 
     [Fact]
+    public void La_lista_blanca_es_la_de_la_especificacion_que_aplica_el_verificador()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "docs", "formato-bundle-v1.md")))
+            dir = dir.Parent;
+        var linea = File.ReadLines(Path.Combine(dir!.FullName, "docs", "formato-bundle-v1.md")).Single(l => l.Contains("lista blanca cerrada:"));
+        var enLaEspecificacion = System.Text.RegularExpressions.Regex.Matches(linea[linea.IndexOf(':')..], "`([A-Za-z]+)`")
+            .Select(m => Enum.Parse<TipoAsiento>(m.Groups[1].Value));
+
+        Assert.Equal(enLaEspecificacion.Order(), ContenidoPericial.TiposCompletos.Order());
+    }
+
+    [Fact]
     public void La_unica_puerta_es_el_guard_y_lanza_su_propia_excepcion()
     {
         var ex = Assert.Throws<EvidenciaSoloInvestigacionException>(_superRes.ExigirAdmisibleEnJuicio);
