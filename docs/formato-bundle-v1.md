@@ -74,7 +74,7 @@ concatenados en el orden indicado, y el resultado en UTF-8. El prefijo de longit
 - `cadena.hasta` y `cadena.hashCabeza` son la secuencia y el hash del último asiento incluido.
 - `archivos` lista todos los archivos embebidos que no son evidencia.
 - `evidencias` lista cada evidencia que el informe presenta:
-  - `asientoDeOrigen` es la secuencia del asiento que la registró: `EvidenciaIngestada` si es un original, `OperacionAplicada` si es un derivado.
+  - `asientoDeOrigen` es la secuencia del asiento que la registró: `EvidenciaIngestada` si es un original, `OperacionAplicada` (u `OperacionIaAplicada`, sólo en un bundle investigativo) si es un derivado.
   - Si `embebida` es `true`, el archivo viaja en `ruta`.
   - Si es `false`, el archivo superó el umbral de tamaño del servidor y viaja aparte. El verificador lo busca **por su hash**, no por su nombre, en la carpeta que se le indique. `nombre` es el nombre declarado en la ingesta: dato no confiable, nunca una ruta.
 
@@ -168,7 +168,7 @@ Un bundle es **ÍNTEGRO** si se cumplen todas. Es **INCOMPLETO** si lo único qu
    - El último cubre `cadena.hasta`.
 8. **Evidencias ancladas:** el `asientoDeOrigen` de cada evidencia es completo, refiere a esa evidencia y su `detalle` coincide con ella:
    - Un original sale de un `EvidenciaIngestada`. Su detalle trae el mismo `sha256` y `tamanoBytes`.
-   - Un derivado sale de un `OperacionAplicada`. Su detalle trae `salida.evidenciaId`, `salida.sha256` y `salida.tamanoBytes` iguales, y su `entrada` (`evidenciaId` y `sha256`) es otra evidencia del bundle. Así el linaje llega hasta un original.
+   - Un derivado sale de un `OperacionAplicada` (en un bundle investigativo, también de un `OperacionIaAplicada`, con el mismo formato de `entrada` y `salida`). Su detalle trae `salida.evidenciaId`, `salida.sha256` y `salida.tamanoBytes` iguales, y su `entrada` (`evidenciaId` y `sha256`) es otra evidencia del bundle con un `asientoDeOrigen` anterior. Así el linaje llega hasta un original.
 9. **Sólo en un bundle pericial:**
    - Todo asiento completo es de un tipo de la lista blanca.
    - Todo asiento completo que refiere a una evidencia refiere a una de `evidencias`.
