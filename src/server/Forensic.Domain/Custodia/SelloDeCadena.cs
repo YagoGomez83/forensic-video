@@ -46,13 +46,20 @@ public sealed class SelloDeCadena
 
     public byte[] Firma { get; }
 
-    public static SelloDeCadena Sellar(AsientoDeCustodia cabeza, DateTimeOffset ahora, string claveId, Func<byte[], byte[]> firmar)
+    public static SelloDeCadena Sellar(AsientoDeCustodia cabeza, DateTimeOffset ahora, string claveId, Func<byte[], byte[]> firmar) =>
+        Sellar(cabeza.CasoId, cabeza.Secuencia, cabeza.Hash, ahora, claveId, firmar);
+
+    /// <summary>
+    /// Sella el eslabón de cualquier cadena encadenada por hash: la de un caso (su id) o la auditoría de
+    /// accesos (<c>CadenaDeAccesos.IdParaSellos</c>).
+    /// </summary>
+    public static SelloDeCadena Sellar(
+        Guid idCadena, long secuencia, HashSha256 hash, DateTimeOffset ahora, string claveId, Func<byte[], byte[]> firmar)
     {
         if (string.IsNullOrWhiteSpace(claveId))
             throw new ExcepcionDeDominio("Un sello debe identificar su clave.");
 
-        var sello = new SelloDeCadena(
-            cabeza.CasoId, cabeza.Secuencia, cabeza.Hash, Tiempo.NormalizarParaCustodia(ahora), claveId, []);
+        var sello = new SelloDeCadena(idCadena, secuencia, hash, Tiempo.NormalizarParaCustodia(ahora), claveId, []);
         var firma = firmar(sello.MensajeCanonico());
         if (firma is null || firma.Length == 0)
             throw new ExcepcionDeDominio("Sin firma no hay sello.");

@@ -70,12 +70,21 @@ public static class RegistroDeCustodia
     /// </summary>
     public static VerificacionDeSellos VerificarSellos(
         Guid casoId, IReadOnlyList<AsientoDeCustodia> asientos, IReadOnlyList<SelloDeCadena> sellos,
+        Func<SelloDeCadena, bool> firmaValida) =>
+        VerificarSellos(casoId, asientos.Select(a => (a.Secuencia, a.Hash)).ToList(), sellos, firmaValida);
+
+    /// <summary>
+    /// Lo mismo para cualquier cadena encadenada por hash, dada como sus eslabones (secuencia y hash),
+    /// ordenados desde la secuencia 1.
+    /// </summary>
+    public static VerificacionDeSellos VerificarSellos(
+        Guid idCadena, IReadOnlyList<(long Secuencia, HashSha256 Hash)> asientos, IReadOnlyList<SelloDeCadena> sellos,
         Func<SelloDeCadena, bool> firmaValida)
     {
         foreach (var s in sellos.OrderBy(s => s.Secuencia))
         {
-            if (s.CasoId != casoId)
-                return SelloRoto(sellos, s, "El sello pertenece a otro caso.");
+            if (s.CasoId != idCadena)
+                return SelloRoto(sellos, s, "El sello pertenece a otra cadena (otro caso).");
             if (!firmaValida(s))
                 return SelloRoto(sellos, s, "La firma del sello no es válida para la clave del laboratorio.");
             if (s.Secuencia < 1 || s.Secuencia > asientos.Count)
