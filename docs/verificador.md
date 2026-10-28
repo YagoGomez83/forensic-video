@@ -36,6 +36,14 @@ Antes de usarlo, compruebe que el ejecutable sea el publicado:
 
 El resultado tiene que coincidir con la línea correspondiente de `SHA256SUMS`.
 
+`SHA256SUMS` viene firmado sin claves (Sigstore) por el CI del repositorio, en `SHA256SUMS.sigstore.json`. Con [cosign](https://docs.sigstore.dev) se comprueba que lo produjo ese CI, desde la rama principal:
+
+```
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity https://github.com/YagoGomez83/forensic-video/.github/workflows/ci.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+```
+
 Si prefiere no confiar en el binario, compílelo usted desde el código fuente (sección 6).
 
 ## 3. Verificar
