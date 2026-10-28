@@ -33,6 +33,20 @@ public class FirmanteEd25519Tests
         Assert.Equal(FirmaRfcDelMensajeVacio, Convert.ToHexString(firmante.Firmar([])).ToLowerInvariant());
     }
 
+    /// <summary>Vector de docs/formato-bundle-v1.md: el sello del asiento del vector, firmado con la clave del RFC.</summary>
+    [Fact]
+    public void La_firma_del_sello_coincide_con_el_vector_publicado()
+    {
+        var firmante = FirmanteEd25519.DesdePem(ClaveDePrueba.Pem(SemillaRfc));
+        var sello = SelloDeCadena.Rehidratar(
+            Guid.Parse("22222222-2222-2222-2222-222222222222"), 1,
+            HashSha256.Parse("5949e6267194282c3eaaac6e9730ed1779ab2fd20d3b20d1bc02cbe04dec2b0a"),
+            new DateTimeOffset(2026, 10, 28, 13, 0, 0, TimeSpan.Zero), firmante.ClaveId, []);
+
+        Assert.Equal("ed25519:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9", firmante.ClaveId);
+        Assert.Equal("61908f5f1905f2742aa988653dc556bfe09e5ec62bb07311eef3b7646ac7b4256329bfae5c3069c0626f5e69260f132e1d53defb46774e3336831f06bc75580c", Convert.ToHexString(firmante.Firmar(sello.MensajeCanonico())).ToLowerInvariant());
+    }
+
     [Fact]
     public void El_id_de_la_clave_es_el_sha256_de_la_clave_publica()
     {
