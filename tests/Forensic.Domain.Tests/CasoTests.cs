@@ -143,4 +143,18 @@ public class CasoTests
         Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformePericial(Auditor));
         Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformePericial(Admin));
     }
+
+    [Fact]
+    public void El_informe_investigativo_lo_emiten_el_analista_asignado_con_el_caso_abierto_y_el_supervisor_siempre()
+    {
+        var caso = CasoDeAna();
+        caso.ExigirEmisionDeInformeInvestigativo(Ana);
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformeInvestigativo(Beto));
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformeInvestigativo(Auditor));
+
+        caso.Cerrar(Supervisora);
+
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformeInvestigativo(Ana));
+        caso.ExigirEmisionDeInformeInvestigativo(Supervisora);
+    }
 }

@@ -14,53 +14,66 @@ namespace Forensic.Domain.Tests;
 /// Qué entra a un informe pericial. ExigirAdmisibleEnJuicio es la única puerta de las evidencias, y
 /// sólo una lista blanca cerrada de tipos de asiento puede mostrarse completa.
 /// </summary>
-public class ContenidoPericialTests
+/// <summary>Un caso con las dos vías: original, recorte OpenCV, hallazgos de IA, super-resolución y una operación OpenCV sobre ella.</summary>
+internal sealed class CasoDeDosVias
 {
-    private readonly Caso _caso = CasoDeAna();
-    private readonly List<AsientoDeCustodia> _cadena = [];
-    private readonly List<Evidencia> _evidencias = [];
+    public readonly Caso Caso = CasoDeAna();
+    public readonly List<AsientoDeCustodia> Cadena = [];
+    public readonly List<Evidencia> Evidencias = [];
 
-    private readonly Evidencia _original;
-    private readonly Evidencia _recorte;
-    private readonly Evidencia _superRes;
-    private readonly Evidencia _rotacionDeLaSuperRes;
+    public readonly Evidencia Foto;
+    public readonly Evidencia Recortada;
+    public readonly Evidencia SuperRes;
+    public readonly Evidencia RotacionDeLaSuperRes;
 
-    public ContenidoPericialTests()
+    public CasoDeDosVias()
     {
         Asentar(TipoAsiento.CasoAbierto, null);
-        _original = Original(_caso);
-        Agregar(_original, TipoAsiento.EvidenciaIngestada);
-        _recorte = Derivar(_original, OpenCv(_original, "recorte"), "recorte.png");
-        Agregar(_recorte, TipoAsiento.OperacionAplicada);
-        Asentar(TipoAsiento.HallazgosRegistrados, _original.Id);
-        _superRes = Derivar(_recorte, Ia(_recorte), "recorte-sr.png");
-        Agregar(_superRes, TipoAsiento.OperacionIaAplicada);
-        _rotacionDeLaSuperRes = Derivar(_superRes, OpenCv(_superRes, "rotada"), "sr-rotada.png");
-        Agregar(_rotacionDeLaSuperRes, TipoAsiento.OperacionAplicada);
-        Asentar(TipoAsiento.EvidenciaAccedida, _superRes.Id);
-        Asentar(TipoAsiento.EvidenciaAccedida, _recorte.Id);
+        Foto = Original(Caso);
+        Agregar(Foto, TipoAsiento.EvidenciaIngestada);
+        Recortada = Derivar(Foto, OpenCv(Foto, "recorte"), "recorte.png");
+        Agregar(Recortada, TipoAsiento.OperacionAplicada);
+        Asentar(TipoAsiento.HallazgosRegistrados, Foto.Id);
+        SuperRes = Derivar(Recortada, Ia(Recortada), "recorte-sr.png");
+        Agregar(SuperRes, TipoAsiento.OperacionIaAplicada);
+        RotacionDeLaSuperRes = Derivar(SuperRes, OpenCv(SuperRes, "rotada"), "sr-rotada.png");
+        Agregar(RotacionDeLaSuperRes, TipoAsiento.OperacionAplicada);
+        Asentar(TipoAsiento.EvidenciaAccedida, SuperRes.Id);
+        Asentar(TipoAsiento.EvidenciaAccedida, Recortada.Id);
         Asentar(TipoAsiento.AnalistaAsignado, null);
     }
 
     private void Asentar(TipoAsiento tipo, Guid? evidencia) =>
-        _cadena.Add(RegistroDeCustodia.Asentar(
-            _cadena.LastOrDefault(), _caso.Id, tipo, evidencia, "{}", Ana, Ahora.AddSeconds(_cadena.Count)));
+        Cadena.Add(RegistroDeCustodia.Asentar(
+            Cadena.LastOrDefault(), Caso.Id, tipo, evidencia, "{}", Ana, Ahora.AddSeconds(Cadena.Count)));
 
     private void Agregar(Evidencia e, TipoAsiento tipo)
     {
-        _evidencias.Add(e);
+        Evidencias.Add(e);
         Asentar(tipo, e.Id);
     }
 
     private OperacionForense OpenCv(Evidencia entrada, string salida) =>
-        OperacionForense.Registrar(_caso, entrada, Recorte.Crear(0, 0, 1, 1), EntornoDePrueba, HashDe(salida), 512, null, Ana, Ahora);
+        OperacionForense.Registrar(Caso, entrada, Recorte.Crear(0, 0, 1, 1), EntornoDePrueba, HashDe(salida), 512, null, Ana, Ahora);
 
     private OperacionForense Ia(Evidencia entrada) =>
         OperacionForense.RegistrarIa(
-            _caso, entrada, CatalogoDeIa.InterpretarOperacion(CatalogoDeIa.SuperResolucion, JsonDocument.Parse("{}").RootElement),
+            Caso, entrada, CatalogoDeIa.InterpretarOperacion(CatalogoDeIa.SuperResolucion, JsonDocument.Parse("{}").RootElement),
             RealEsrgan, EntornoDePrueba, HashDe("sr"), 4096, Ana, Ahora);
 
     private static Evidencia Derivar(Evidencia padre, OperacionForense op, string nombre) => padre.Derivar(op, nombre);
+}
+
+public class ContenidoPericialTests
+{
+    private readonly CasoDeDosVias _c = new();
+    private Caso _caso => _c.Caso;
+    private List<AsientoDeCustodia> _cadena => _c.Cadena;
+    private List<Evidencia> _evidencias => _c.Evidencias;
+    private Evidencia _original => _c.Foto;
+    private Evidencia _recorte => _c.Recortada;
+    private Evidencia _superRes => _c.SuperRes;
+    private Evidencia _rotacionDeLaSuperRes => _c.RotacionDeLaSuperRes;
 
     private ContenidoPericial Armar() => ContenidoPericial.Armar(_caso, _evidencias, _cadena);
 

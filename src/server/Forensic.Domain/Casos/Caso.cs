@@ -111,6 +111,17 @@ public sealed class Caso
                 $"'{actor.Usuario}' no puede emitir un informe pericial del caso {NumeroExpediente} (estado {Estado}).");
     }
 
+    /// <summary>
+    /// Emitir un informe investigativo: hoy, la misma política que el pericial; va aparte para que una
+    /// pueda cambiar sin arrastrar a la otra.
+    /// </summary>
+    public void ExigirEmisionDeInformeInvestigativo(Actor actor)
+    {
+        if (!(PuedeOperar(actor) || actor.Rol == Rol.Supervisor))
+            throw new AccesoDenegadoException(
+                $"'{actor.Usuario}' no puede emitir un informe investigativo del caso {NumeroExpediente} (estado {Estado}).");
+    }
+
     public void ExigirLectura(Actor actor)
     {
         if (!PuedeLeer(actor))

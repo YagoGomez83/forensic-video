@@ -17,6 +17,7 @@ public enum TipoAsiento
     HallazgosRegistrados = 9,
     OperacionIaAplicada = 10,
     InformePericialEmitido = 11,
+    InformeInvestigativoEmitido = 12,
 }
 
 /// <summary>
