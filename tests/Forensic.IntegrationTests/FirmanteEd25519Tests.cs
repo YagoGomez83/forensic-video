@@ -95,11 +95,18 @@ public class FirmanteEd25519Tests
     [InlineData("")]
     [InlineData("no es un pem")]
     [InlineData("-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n")]
-    // Una clave EC P-256 en PKCS#8: es una privada válida, pero no es Ed25519.
-    [InlineData("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgevZzL1gdAFr88hb2OF/2NxApJCzGCEDdfSp6VQO30hyhRANCAAQRWz+jn65BtOMvdyHKcvjBeBSDZH2r1RTwjmYSi9R/zpBnuQ4EiMnCqfMPWiZqB4QdbAd0E7oH50VpuZ1P087G\n-----END PRIVATE KEY-----\n")]
     public void Una_clave_que_no_es_ed25519_en_pkcs8_se_rechaza(string pem)
     {
         Assert.Throws<InvalidOperationException>(() => FirmanteEd25519.DesdePem(pem));
+    }
+
+    [Fact]
+    public void Una_clave_ec_valida_en_pkcs8_tampoco_se_acepta()
+    {
+        // Generada en el test, no escrita en el código: es una privada válida, pero no es Ed25519.
+        using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        Assert.Throws<InvalidOperationException>(() => FirmanteEd25519.DesdePem(ec.ExportPkcs8PrivateKeyPem()));
     }
 
     [Fact]
