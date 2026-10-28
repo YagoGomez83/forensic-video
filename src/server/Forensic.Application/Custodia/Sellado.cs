@@ -40,7 +40,7 @@ public interface IAlmacenDeSellos
 /// </summary>
 public sealed class ServicioDeSellado(
     IPersistenciaForense persistencia, IAlmacenDeSellos almacen, IFirmanteDeCadena firmante,
-    TimeProvider reloj, ILogger<ServicioDeSellado> logger)
+    Identidad.ILectorDeAuditoriaDeAccesos auditoriaDeAccesos, TimeProvider reloj, ILogger<ServicioDeSellado> logger)
 {
     /// <summary>
     /// Sella cada caso que tenga asientos posteriores a su último sello. Nunca sella una cadena que
@@ -55,7 +55,38 @@ public sealed class ServicioDeSellado(
             if (await SellarSiHaceFaltaAsync(caso.Id, ct))
                 agregados++;
         }
+        if (await SellarAuditoriaDeAccesosAsync(ct))
+            agregados++;
         return agregados;
+    }
+
+    /// <summary>La auditoría de accesos se sella igual, con su propio id: también delata una reconstrucción o un truncado.</summary>
+    private async Task<bool> SellarAuditoriaDeAccesosAsync(CancellationToken ct)
+    {
+        var cadena = await auditoriaDeAccesos.LeerCadenaAsync(ct);
+        if (cadena.Count == 0)
+            return false;
+        var verificacion = Domain.Identidad.CadenaDeAccesos.Verificar(cadena);
+        if (!verificacion.EsIntegra)
+        {
+            logger.LogCritical("No se sella la auditoría de accesos: no verifica en la secuencia {Secuencia}: {Motivo}",
+                verificacion.SecuenciaRota, verificacion.Motivo);
+            return false;
+        }
+        var id = Domain.Identidad.CadenaDeAccesos.IdParaSellos;
+        var cruce = RegistroDeCustodia.VerificarSellos(
+            id, cadena.Select(a => (a.Secuencia, a.Hash)).ToList(), await almacen.ListarAsync(id, ct), firmante.Verificar);
+        if (!cruce.SonValidos)
+        {
+            logger.LogCritical("No se sella la auditoría de accesos: no coincide con el sello de la secuencia {Secuencia}: {Motivo}",
+                cruce.SecuenciaRota, cruce.Motivo);
+            return false;
+        }
+        if (cruce.AsientosSinSellar == 0)
+            return false;
+        var cabeza = cadena[^1];
+        return await almacen.AgregarAsync(
+            SelloDeCadena.Sellar(id, cabeza.Secuencia, cabeza.Hash, reloj.GetUtcNow(), firmante.ClaveId, firmante.Firmar), ct);
     }
 
     /// <summary>

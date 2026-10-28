@@ -95,9 +95,28 @@ namespace Forensic.Infrastructure.Identidad.Migraciones
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("HashAnterior")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
                     b.Property<string>("Origen")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<long>("Secuencia")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
 
                     b.Property<DateTimeOffset>("Timestamp")
                         .HasColumnType("timestamp with time zone");
@@ -113,6 +132,9 @@ namespace Forensic.Infrastructure.Identidad.Migraciones
                         .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Secuencia")
+                        .IsUnique();
 
                     b.HasIndex("Usuario", "Timestamp");
 

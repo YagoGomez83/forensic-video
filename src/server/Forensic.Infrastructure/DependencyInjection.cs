@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<RepositorioDeUsuarios>();
         services.AddScoped<IRepositorioDeUsuarios>(sp => sp.GetRequiredService<RepositorioDeUsuarios>());
         services.AddScoped<IAuditoriaDeAccesos>(sp => sp.GetRequiredService<RepositorioDeUsuarios>());
+        services.AddScoped<ILectorDeAuditoriaDeAccesos, LectorDeAuditoriaDeAccesos>();
         services.AddSingleton<IHasheadorDeContrasena, HasheadorArgon2id>();
         services.AddOptions<OpcionesJwt>().Bind(configuration.GetSection(OpcionesJwt.Seccion));
         services.AddSingleton<IEmisorDeTokens, EmisorDeTokensJwt>();
