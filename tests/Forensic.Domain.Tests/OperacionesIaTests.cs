@@ -42,7 +42,7 @@ public class OperacionesIaTests
         Assert.Equal(CatalogoDeIa.SuperResolucion, op.Tipo);
         Assert.Equal("{}", op.Parametros);
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, derivado.Via);
-        Assert.Throws<ExcepcionDeDominio>(derivado.ExigirAdmisibleEnJuicio);
+        Assert.Throws<EvidenciaSoloInvestigacionException>(derivado.ExigirAdmisibleEnJuicio);
     }
 
     [Fact]

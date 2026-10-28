@@ -80,7 +80,7 @@ public class EvidenciaTests
 
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, conIa.Via);
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, nieto.Via);
-        Assert.Throws<ExcepcionDeDominio>(nieto.ExigirAdmisibleEnJuicio);
+        Assert.Throws<EvidenciaSoloInvestigacionException>(nieto.ExigirAdmisibleEnJuicio);
     }
 
     [Fact]
