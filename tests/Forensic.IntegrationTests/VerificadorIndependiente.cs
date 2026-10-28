@@ -37,6 +37,13 @@ internal static class VerificadorIndependiente
         return new Corrida(codigo, doc.RootElement.Clone(), salida);
     }
 
+    /// <summary>La salida de texto, tal como la lee un perito en su consola.</summary>
+    public static async Task<(int Codigo, string Salida)> VerificarEnTextoAsync(string bundle, string huella, string exigir)
+    {
+        var (codigo, salida, error) = await CorrerAsync(await Binario.Value, ["--clave", huella, "--exigir", exigir, bundle], workingDirectory: null);
+        return (codigo, salida + error);
+    }
+
     private static async Task<string> CompilarAsync()
     {
         var fuente = Path.Combine(CommonDirectoryPath.GetGitDirectory().DirectoryPath, "tools", "verificador");
@@ -54,6 +61,9 @@ internal static class VerificadorIndependiente
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // El verificador escribe UTF-8; sin esto, en Windows se leería con la página de códigos de la consola.
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
             WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
         };
         foreach (var a in args)

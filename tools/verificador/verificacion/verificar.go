@@ -262,11 +262,11 @@ func (v *verificador) verificarManifiesto() bool {
 		return false
 	}
 	v.res.Tipo, v.res.Caso, v.res.Hasta = m.Tipo, m.Caso.ID, m.Cadena.Hasta
+	v.ok(ReglaManifiesto, "Bundle %s %s del caso %s (expediente %s), asientos 1-%d.",
+		m.Formato, strings.ToUpper(m.Tipo), m.Caso.ID, m.Caso.NumeroExpediente, m.Cadena.Hasta)
 	if v.op.ExigirTipo != "" && v.op.ExigirTipo != m.Tipo {
 		v.falla(ReglaManifiesto, "Se exigió un bundle %s, pero este es %s.", v.op.ExigirTipo, m.Tipo)
 	}
-	v.ok(ReglaManifiesto, "Bundle %s %s del caso %s (expediente %s), asientos 1-%d.",
-		m.Formato, strings.ToUpper(m.Tipo), m.Caso.ID, m.Caso.NumeroExpediente, m.Cadena.Hasta)
 	return true
 }
 
@@ -629,7 +629,7 @@ func (v *verificador) verificarSellos() {
 		sanos = false
 	}
 	if sanos {
-		v.ok(ReglaSellos, "Sellos: %d válidos; secuencias %s coinciden con la cadena; el último cubre la cabeza.",
+		v.ok(ReglaSellos, "Sellos válidos: %d (secuencias %s); coinciden con la cadena y el último cubre la cabeza.",
 			len(s.Sellos), strings.Join(secuencias, ", "))
 	}
 }
