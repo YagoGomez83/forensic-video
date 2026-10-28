@@ -86,3 +86,25 @@ public sealed class ServicioDeSellado(
         return await almacen.AgregarAsync(sello, ct);
     }
 }
+
+/// <summary>
+/// La cadena de un caso en la que se puede confiar para decidir algo pericial (reproducir, emitir un
+/// informe): verifica por sí misma y coincide con todos sus sellos. Si no, nada que dependa de ella sigue.
+/// </summary>
+public sealed class VerificadorDeCadena(IPersistenciaForense persistencia, IAlmacenDeSellos almacen, IFirmanteDeCadena firmante)
+{
+    public async Task<IReadOnlyList<AsientoDeCustodia>> ObtenerConfiableAsync(Guid casoId, CancellationToken ct)
+    {
+        var cadena = await persistencia.ObtenerCadenaAsync(casoId, ct);
+        var verificacion = RegistroDeCustodia.Verificar(casoId, cadena);
+        if (!verificacion.EsIntegra)
+            throw new CadenaComprometidaException(
+                $"La cadena del caso no verifica (asiento {verificacion.SecuenciaRota}: {verificacion.Motivo}).");
+
+        var cruce = RegistroDeCustodia.VerificarSellos(casoId, cadena, await almacen.ListarAsync(casoId, ct), firmante.Verificar);
+        if (!cruce.SonValidos)
+            throw new CadenaComprometidaException(
+                $"La cadena del caso no coincide con su sello de la secuencia {cruce.SecuenciaRota}: {cruce.Motivo}");
+        return cadena;
+    }
+}

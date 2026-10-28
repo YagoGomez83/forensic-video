@@ -2,10 +2,8 @@ using System.Security.Cryptography;
 using Forensic.Application.Custodia;
 using Forensic.Domain.Comun;
 using Forensic.Domain.Custodia;
-using Forensic.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 using Sodium;
 
 namespace Forensic.IntegrationTests;
@@ -27,42 +25,6 @@ public class SelladoDeCadenaTests(ServidorForense servidor) : IClassFixture<Serv
     {
         using var scope = servidor.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<IAlmacenDeSellos>().ListarAsync(casoId, CancellationToken.None);
-    }
-
-    private async Task EjecutarSinTriggersAsync(string sql, Guid casoId)
-    {
-        await using var conexion = new NpgsqlConnection(servidor.CadenaDeConexion);
-        await conexion.OpenAsync();
-        await using var cmd = new NpgsqlCommand($"""
-            ALTER TABLE "AsientosDeCustodia" DISABLE TRIGGER "AsientosDeCustodia_append_only";
-            {sql}
-            ALTER TABLE "AsientosDeCustodia" ENABLE TRIGGER "AsientosDeCustodia_append_only";
-            """, conexion);
-        cmd.Parameters.AddWithValue("caso", casoId);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    /// <summary>
-    /// Lo que haría quien controla la base: borra la cadena y la vuelve a asentar entera, con un
-    /// actor cambiado y todos los hashes recalculados. La cadena nueva verifica por sí misma.
-    /// </summary>
-    private async Task ReconstruirCadenaAsync(Guid casoId)
-    {
-        var original = (await _ana.ExportarAsync(casoId)).Asientos;
-        await EjecutarSinTriggersAsync("""DELETE FROM "AsientosDeCustodia" WHERE "CasoId" = @caso;""", casoId);
-
-        using var scope = servidor.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ContextoForense>();
-        AsientoDeCustodia? ultimo = null;
-        foreach (var a in original)
-        {
-            var actor = a.Secuencia == 2 ? "impostor" : a.Actor;
-            ultimo = RegistroDeCustodia.Asentar(
-                ultimo, casoId, Enum.Parse<TipoAsiento>(a.Tipo), a.EvidenciaId, a.Detalle,
-                new Actor(actor, Rol.Analista), a.Timestamp);
-            db.AsientosDeCustodia.Add(ultimo);
-        }
-        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -129,7 +91,7 @@ public class SelladoDeCadenaTests(ServidorForense servidor) : IClassFixture<Serv
         var caso = await CasoConEvidenciasAsync(2);
         await servidor.SellarPendientesAsync();
 
-        await ReconstruirCadenaAsync(caso);
+        await servidor.ReconstruirCadenaAsync(caso);
         var export = await _ana.ExportarAsync(caso);
 
         Assert.True(export.Verificacion.EsIntegra);
@@ -144,7 +106,7 @@ public class SelladoDeCadenaTests(ServidorForense servidor) : IClassFixture<Serv
         var caso = await CasoConEvidenciasAsync(3);
         await servidor.SellarPendientesAsync();
 
-        await EjecutarSinTriggersAsync("""DELETE FROM "AsientosDeCustodia" WHERE "CasoId" = @caso AND "Secuencia" > 2;""", caso);
+        await servidor.EjecutarSinTriggersAsync("""DELETE FROM "AsientosDeCustodia" WHERE "CasoId" = @caso AND "Secuencia" > 2;""", caso);
         var export = await _ana.ExportarAsync(caso);
 
         Assert.True(export.Verificacion.EsIntegra);
@@ -156,7 +118,7 @@ public class SelladoDeCadenaTests(ServidorForense servidor) : IClassFixture<Serv
     public async Task Una_cadena_comprometida_no_se_sella()
     {
         var caso = await CasoConEvidenciasAsync(1);
-        await EjecutarSinTriggersAsync(
+        await servidor.EjecutarSinTriggersAsync(
             """UPDATE "AsientosDeCustodia" SET "Actor" = 'impostor' WHERE "CasoId" = @caso AND "Secuencia" = 2;""", caso);
 
         await servidor.SellarPendientesAsync();
@@ -169,7 +131,7 @@ public class SelladoDeCadenaTests(ServidorForense servidor) : IClassFixture<Serv
     {
         var caso = await CasoConEvidenciasAsync(1);
         await servidor.SellarPendientesAsync();
-        await ReconstruirCadenaAsync(caso);
+        await servidor.ReconstruirCadenaAsync(caso);
         (await _ana.IngestarAsync(caso, RandomNumberGenerator.GetBytes(64))).EnsureSuccessStatusCode();
 
         await servidor.SellarPendientesAsync();
