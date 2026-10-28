@@ -1,11 +1,12 @@
 # Servidor de custodia. Contexto de build: la raíz del repo (necesita global.json y Directory.*.props).
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# Bases fijadas por digest; Dependabot propone las actualizaciones.
+FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:6ba9644da07bb5b560a402acec9ca38711a0762969f1b61da261df5c9f6f85da AS build
 WORKDIR /repo
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/server/ src/server/
 RUN dotnet publish src/server/Forensic.Api/Forensic.Api.csproj -c Release -o /publicar
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:ea721098d6ea2894ff9bd8387821a1659d4765d6c014b8d648bb1da16f016f5a
 WORKDIR /app
 COPY --from=build /publicar .
 
