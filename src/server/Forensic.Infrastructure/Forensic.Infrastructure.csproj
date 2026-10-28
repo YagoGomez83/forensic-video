@@ -7,6 +7,13 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Sodium.Core" />
     <PackageReference Include="libsodium" />
+    <PackageReference Include="PDFsharp-MigraDoc" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Fuentes de los PDF (SIL OFL 1.1): el servidor corre sin fuentes del sistema. -->
+    <EmbeddedResource Include="Informes\Fuentes\*.ttf" LogicalName="Fuentes.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

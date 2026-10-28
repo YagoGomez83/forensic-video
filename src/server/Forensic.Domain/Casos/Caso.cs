@@ -99,6 +99,29 @@ public sealed class Caso
     public bool PuedeCompletarControlCruzado(Actor actor) =>
         PuedeOperar(actor) || actor.Rol == Rol.Supervisor;
 
+    /// <summary>
+    /// Emitir un informe pericial: el analista asignado con el caso abierto (informe preliminar) y un
+    /// supervisor en cualquier estado. Es una decisión de política: exigir el caso cerrado sería
+    /// cambiar sólo esta regla. El auditor nunca, porque la emisión se asienta en la cadena.
+    /// </summary>
+    public void ExigirEmisionDeInformePericial(Actor actor)
+    {
+        if (!(PuedeOperar(actor) || actor.Rol == Rol.Supervisor))
+            throw new AccesoDenegadoException(
+                $"'{actor.Usuario}' no puede emitir un informe pericial del caso {NumeroExpediente} (estado {Estado}).");
+    }
+
+    /// <summary>
+    /// Emitir un informe investigativo: hoy, la misma política que el pericial; va aparte para que una
+    /// pueda cambiar sin arrastrar a la otra.
+    /// </summary>
+    public void ExigirEmisionDeInformeInvestigativo(Actor actor)
+    {
+        if (!(PuedeOperar(actor) || actor.Rol == Rol.Supervisor))
+            throw new AccesoDenegadoException(
+                $"'{actor.Usuario}' no puede emitir un informe investigativo del caso {NumeroExpediente} (estado {Estado}).");
+    }
+
     public void ExigirLectura(Actor actor)
     {
         if (!PuedeLeer(actor))

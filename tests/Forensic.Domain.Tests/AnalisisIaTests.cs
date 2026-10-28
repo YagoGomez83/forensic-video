@@ -297,7 +297,7 @@ public class AnalisisIaTests
         Assert.True(SuperRes().UsaIa);
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, op.Via);
         Assert.Equal(ViaProcesamiento.SoloInvestigacion, nieto.Via);
-        Assert.Throws<ExcepcionDeDominio>(nieto.ExigirAdmisibleEnJuicio);
+        Assert.Throws<EvidenciaSoloInvestigacionException>(nieto.ExigirAdmisibleEnJuicio);
     }
 
     [Fact]

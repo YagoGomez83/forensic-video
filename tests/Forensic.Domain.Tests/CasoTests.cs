@@ -111,4 +111,50 @@ public class CasoTests
         Assert.False(caso.PuedeCompletarControlCruzado(Admin));
         Assert.Throws<AccesoDenegadoException>(() => caso.AsignarAnalista("beto", Admin));
     }
+
+    [Fact]
+    public void El_analista_asignado_emite_el_informe_pericial_solo_con_el_caso_abierto()
+    {
+        var caso = CasoDeAna();
+        caso.ExigirEmisionDeInformePericial(Ana);
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformePericial(Beto));
+
+        caso.Cerrar(Supervisora);
+
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformePericial(Ana));
+    }
+
+    [Fact]
+    public void Un_supervisor_emite_el_informe_pericial_en_cualquier_estado()
+    {
+        var caso = CasoDeAna();
+        caso.ExigirEmisionDeInformePericial(Supervisora);
+
+        caso.Cerrar(Supervisora);
+
+        caso.ExigirEmisionDeInformePericial(Supervisora);
+    }
+
+    [Fact]
+    public void Ni_el_auditor_ni_el_admin_emiten_informes()
+    {
+        var caso = CasoDeAna();
+
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformePericial(Auditor));
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformePericial(Admin));
+    }
+
+    [Fact]
+    public void El_informe_investigativo_lo_emiten_el_analista_asignado_con_el_caso_abierto_y_el_supervisor_siempre()
+    {
+        var caso = CasoDeAna();
+        caso.ExigirEmisionDeInformeInvestigativo(Ana);
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformeInvestigativo(Beto));
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformeInvestigativo(Auditor));
+
+        caso.Cerrar(Supervisora);
+
+        Assert.Throws<AccesoDenegadoException>(() => caso.ExigirEmisionDeInformeInvestigativo(Ana));
+        caso.ExigirEmisionDeInformeInvestigativo(Supervisora);
+    }
 }

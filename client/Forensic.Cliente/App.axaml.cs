@@ -23,7 +23,8 @@ public sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime escritorio)
         {
             var servidor = new Uri(Environment.GetEnvironmentVariable(VariableDelServidor) ?? "http://localhost:5065/");
-            var api = ClienteForense.Crear(servidor, new SesionEnMemoria());
+            // https exige TLS mutuo (CA y certificado de esta workstation); en claro, sólo loopback.
+            var api = ClienteForense.Crear(servidor, new SesionEnMemoria(), CanalSeguro.DesdeEntorno(servidor, Environment.GetEnvironmentVariable));
             var workerIa = ClienteWorkerIa.Crear(
                 Environment.GetEnvironmentVariable(VariableDelWorkerIa) is { } url ? new Uri(url) : ClienteWorkerIa.PorDefecto);
             escritorio.MainWindow = new VentanaPrincipal

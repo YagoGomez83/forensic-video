@@ -8,15 +8,23 @@ on:
 permissions:
   contents: read
 
+# Todas las acciones van fijadas por SHA de commit (con su versión en el comentario): un tag se puede
+# reescribir, un SHA no. Dependabot (.github/dependabot.yml) propone las actualizaciones.
+
 jobs:
   servidor:
     name: Servidor .NET (build + test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
+      # Los tests del informe pericial compilan y corren el verificador independiente (Go).
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
       - run: dotnet restore src/server/Forensic.sln
       - run: dotnet build src/server/Forensic.sln -c Release --no-restore
       # Los tests de integración levantan PostgreSQL con Testcontainers (Docker viene en el runner).
@@ -30,13 +38,17 @@ jobs:
     name: Cliente de escritorio (build + test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
       - run: dotnet build client/Forensic.Cliente.sln -c Release
       # ViewModels con dobles de la API y Avalonia.Headless para los bindings y el visor: sin pantalla.
       - run: dotnet test client/Forensic.Cliente.sln -c Release --no-build
+      - name: Dependencias NuGet vulnerables
+        run: |
+          dotnet list client/Forensic.Cliente.sln package --vulnerable --include-transitive | tee vulnerables.txt
+          if grep -q "has the following vulnerable packages" vulnerables.txt; then exit 1; fi
 
   worker-ingest:
     name: Worker de ingesta (lint + test)
@@ -45,8 +57,8 @@ jobs:
       run:
         working-directory: src/workers/ingest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
@@ -61,8 +73,8 @@ jobs:
       run:
         working-directory: src/workers/procesamiento
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
@@ -78,8 +90,8 @@ jobs:
       run:
         working-directory: src/workers/ia
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
@@ -89,38 +101,126 @@ jobs:
       - run: python scripts/descargar_modelos.py
       - run: pytest
 
-  imagen-worker-ia:
-    name: Imagen del worker de IA (red cortada + Trivy)
+  verificador:
+    name: Verificador independiente (Go, vet + test + binarios)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # firma sin claves de los binarios (sólo en main)
+    defaults:
+      run:
+        working-directory: tools/verificador
     steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t forensic-worker-ia:ci src/workers/ia
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      # Lo que se entrega a un perito de contraparte: binarios estáticos, sin dependencias.
+      - name: Binarios
+        run: |
+          for p in windows/amd64 linux/amd64 linux/arm64 darwin/arm64; do
+            os=${p%/*}; arq=${p#*/}; ext=""; [ "$os" = windows ] && ext=.exe
+            GOOS=$os GOARCH=$arq CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_SHA::12}" \
+              -o "dist/verificador-$os-$arq$ext" .
+          done
+          cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # En main, SHA256SUMS se firma sin claves: un tercero comprueba que los binarios salieron de este CI.
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        name: Firmar SHA256SUMS
+        working-directory: tools/verificador/dist
+        run: |
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verificador
+          path: tools/verificador/dist/
+
+  imagenes:
+    name: Imagen ${{ matrix.nombre }} (Trivy, y en main publicar y firmar)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # GHCR, sólo en main
+      id-token: write # firma sin claves con cosign, sólo en main
+      security-events: write # reporte de Trivy en la pestaña de seguridad
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { nombre: servidor, contexto: ., dockerfile: src/server/Dockerfile }
+          - { nombre: worker-ingest, contexto: src/workers/ingest, dockerfile: src/workers/ingest/Dockerfile }
+          - { nombre: worker-procesamiento, contexto: src/workers/procesamiento, dockerfile: src/workers/procesamiento/Dockerfile }
+          - { nombre: worker-ia, contexto: src/workers/ia, dockerfile: src/workers/ia/Dockerfile }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: docker build -f ${{ matrix.dockerfile }} -t forensic-${{ matrix.nombre }}:ci ${{ matrix.contexto }}
       # Con --network none: si intentara bajar un modelo, no arrancaría. Sin GPU en el CI, corre en CPU.
-      - run: src/workers/ia/scripts/verificar_imagen.sh forensic-worker-ia:ci
-      # Se escanea la imagen entera: onnxruntime-gpu, CUDA y cuDNN incluidos.
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - if: matrix.nombre == 'worker-ia'
+        run: src/workers/ia/scripts/verificar_imagen.sh forensic-worker-ia:ci
+      # Gate: falla ante cualquier vulnerabilidad alta o crítica con arreglo publicado, y ante secretos en
+      # la imagen. Se escanea la imagen entera (base, runtime y, en la de IA, CUDA y cuDNN).
+      - name: Trivy (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: forensic-worker-ia:ci
+          image-ref: forensic-${{ matrix.nombre }}:ci
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+      # Reporte completo, también lo que no tiene arreglo todavía, para seguirlo en la pestaña de seguridad.
+      - name: Trivy (reporte)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: forensic-${{ matrix.nombre }}:ci
+          scanners: vuln,secret
+          format: sarif
+          output: trivy.sarif
+          exit-code: "0"
+      - if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9f759ee644a3e7c15c1390abf49868036c00067b # v3.38.3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-${{ matrix.nombre }}
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: ./.github/actions/publicar-y-firmar
+        with:
+          imagen-local: forensic-${{ matrix.nombre }}:ci
+          nombre: ${{ matrix.nombre }}
 
-  imagenes:
-    name: Imágenes Docker
+  secretos:
+    name: Secretos en todo el historial (gitleaks, gate)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: docker build -f src/server/Dockerfile -t forensic-servidor:ci .
-      - run: docker build -t forensic-worker-ingest:ci src/workers/ingest
-      - run: docker build -t forensic-worker-procesamiento:ci src/workers/procesamiento
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      # La imagen oficial por digest (la acción de gitleaks pide licencia en organizaciones). Excepciones
+      # acotadas y justificadas en .gitleaks.toml.
+      - name: gitleaks
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo --config /repo/.gitleaks.toml --redact --no-banner --exit-code 1
 
   trivy:
-    name: Escaneo Trivy (dependencias, secretos, configuración)
+    name: Escaneo Trivy del repositorio (dependencias, secretos, configuración)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Fijada por SHA: los tags de esta acción fueron reescritos en un incidente de cadena de suministro.
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -139,11 +239,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lenguaje: [csharp, python]
+        include:
+          - { lenguaje: csharp, modo: none }
+          - { lenguaje: python, modo: none }
+          - { lenguaje: go, modo: manual }
+          - { lenguaje: actions, modo: none }
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - if: matrix.lenguaje == 'go'
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
+      - uses: github/codeql-action/init@9f759ee644a3e7c15c1390abf49868036c00067b # v3.38.3
         with:
           languages: ${{ matrix.lenguaje }}
-          build-mode: none
-      - uses: github/codeql-action/analyze@v3
+          build-mode: ${{ matrix.modo }}
+          # Más reglas de seguridad que el conjunto por defecto.
+          queries: security-extended
+      - if: matrix.lenguaje == 'go'
+        working-directory: tools/verificador
+        run: go build ./...
+      - uses: github/codeql-action/analyze@9f759ee644a3e7c15c1390abf49868036c00067b # v3.38.3
+        with:
+          category: /language:${{ matrix.lenguaje }}

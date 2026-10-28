@@ -2,7 +2,8 @@
 # y, sin GPU, cae a CPU con los mismos pesos. Los pesos entran AL CONSTRUIR, verificados contra el
 # hash de app/modelos.json; en ejecución nada se descarga: con la red cortada el worker arranca igual.
 # Sin sintaxis de BuildKit: la imagen se construye igual con el builder clásico (Testcontainers).
-FROM python:3.12-slim-bookworm
+# Base fijada por digest: la imagen es parte del entorno asentado. Dependabot propone las actualizaciones.
+FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337
 
 WORKDIR /srv/worker
 # Primero todas las dependencias con versión exacta (incluidas CUDA y cuDNN, que trae el extra «gpu»

@@ -87,11 +87,14 @@ public sealed class Evidencia
         };
     }
 
+    /// <summary>
+    /// La única puerta del informe pericial: lo que no la pasa no puede presentarse como prueba.
+    /// </summary>
     public void ExigirAdmisibleEnJuicio()
     {
         if (Via != ViaProcesamiento.AdmisibleEnJuicio)
-            throw new ExcepcionDeDominio(
-                $"La evidencia {Id} es «sólo investigación» y no puede presentarse como prueba.");
+            throw new EvidenciaSoloInvestigacionException(
+                Id, $"La evidencia {Id} es «sólo investigación» y no puede presentarse como prueba.");
     }
 
     internal static void ValidarContenido(HashSha256 hash, long tamanoBytes)

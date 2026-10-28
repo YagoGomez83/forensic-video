@@ -7,9 +7,9 @@ namespace Forensic.Domain.Custodia;
 /// el último eslabón; para verificar, la cadena completa.
 /// </summary>
 /// <remarks>
-/// La cadena detecta alteración o eliminación de asientos intermedios, pero no el truncado del final.
-/// Eso lo cubre la firma periódica del estado de la cadena (Fase 5) y, mientras tanto, los
-/// triggers que impiden UPDATE/DELETE en la base.
+/// La cadena detecta alteración o eliminación de asientos intermedios, pero no el truncado del final
+/// ni una reconstrucción entera con todos los hashes recalculados. Eso lo cubren los
+/// <see cref="SelloDeCadena"/> (<see cref="VerificarSellos"/>), hasta el último asiento sellado.
 /// </remarks>
 public static class RegistroDeCustodia
 {
@@ -62,6 +62,44 @@ public static class RegistroDeCustodia
         }
         return VerificacionDeCadena.Integra(asientos.Count, anterior);
     }
+
+    /// <summary>
+    /// Cruza la cadena (ordenada por secuencia) con sus sellos. Usa los hashes guardados en cada
+    /// asiento: que además se recalculen bien es <see cref="Verificar"/>. Una cadena reconstruida
+    /// entera pasa <see cref="Verificar"/>, pero no coincide con un sello anterior.
+    /// </summary>
+    public static VerificacionDeSellos VerificarSellos(
+        Guid casoId, IReadOnlyList<AsientoDeCustodia> asientos, IReadOnlyList<SelloDeCadena> sellos,
+        Func<SelloDeCadena, bool> firmaValida) =>
+        VerificarSellos(casoId, asientos.Select(a => (a.Secuencia, a.Hash)).ToList(), sellos, firmaValida);
+
+    /// <summary>
+    /// Lo mismo para cualquier cadena encadenada por hash, dada como sus eslabones (secuencia y hash),
+    /// ordenados desde la secuencia 1.
+    /// </summary>
+    public static VerificacionDeSellos VerificarSellos(
+        Guid idCadena, IReadOnlyList<(long Secuencia, HashSha256 Hash)> asientos, IReadOnlyList<SelloDeCadena> sellos,
+        Func<SelloDeCadena, bool> firmaValida)
+    {
+        foreach (var s in sellos.OrderBy(s => s.Secuencia))
+        {
+            if (s.CasoId != idCadena)
+                return SelloRoto(sellos, s, "El sello pertenece a otra cadena (otro caso).");
+            if (!firmaValida(s))
+                return SelloRoto(sellos, s, "La firma del sello no es válida para la clave del laboratorio.");
+            if (s.Secuencia < 1 || s.Secuencia > asientos.Count)
+                return SelloRoto(sellos, s, $"El sello cubre la secuencia {s.Secuencia}, pero la cadena tiene {asientos.Count} asientos: fue truncada.");
+            var sellado = asientos[(int)(s.Secuencia - 1)];
+            if (sellado.Secuencia != s.Secuencia || sellado.Hash != s.HashCabeza)
+                return SelloRoto(sellos, s, "El asiento sellado no tiene el hash del sello: la cadena fue reconstruida o alterada.");
+        }
+
+        long? ultima = sellos.Count == 0 ? null : sellos.Max(s => s.Secuencia);
+        return new VerificacionDeSellos(true, sellos.Count, ultima, asientos.Count - (ultima ?? 0), null, null);
+    }
+
+    private static VerificacionDeSellos SelloRoto(IReadOnlyList<SelloDeCadena> sellos, SelloDeCadena roto, string motivo) =>
+        new(false, sellos.Count, null, 0, roto.Secuencia, motivo);
 }
 
 public sealed record VerificacionDeCadena(

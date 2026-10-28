@@ -138,6 +138,20 @@ public class ReproduccionTests(ServidorForense servidor) : IClassFixture<Servido
     }
 
     [Fact]
+    public async Task Con_la_cadena_reconstruida_entera_no_se_reproduce_aunque_verifique_por_si_misma()
+    {
+        var (casoId, _, derivado) = await CasoConRecorteAsync();
+        await servidor.SellarPendientesAsync();
+
+        await servidor.ReconstruirCadenaAsync(casoId);
+        Assert.True((await _ana.ExportarAsync(casoId)).Verificacion.EsIntegra);
+
+        var respuesta = await _ana.ReproducirAsync(casoId, derivado.Id);
+        Assert.Equal(HttpStatusCode.Locked, respuesta.StatusCode);
+        Assert.Contains("sello", await respuesta.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task El_linaje_de_un_derivado_va_del_original_al_derivado_con_cada_operacion_y_sus_reproducciones()
     {
         var (casoId, original, primero) = await CasoConRecorteAsync();

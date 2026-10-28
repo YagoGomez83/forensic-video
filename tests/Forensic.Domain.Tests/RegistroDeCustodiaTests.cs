@@ -24,6 +24,20 @@ public class RegistroDeCustodiaTests
         new(a.Id, a.CasoId, secuencia ?? a.Secuencia, a.Tipo, a.EvidenciaId, detalle ?? a.Detalle,
             actor ?? a.Actor, a.Timestamp, a.HashAnterior, a.Hash);
 
+    /// <summary>Vector de docs/formato-bundle-v1.md: un verificador de terceros tiene que llegar al mismo hash.</summary>
+    public static AsientoDeCustodia AsientoDelVector() =>
+        new(Guid.Parse("11111111-1111-1111-1111-111111111111"), Guid.Parse("22222222-2222-2222-2222-222222222222"), 1,
+            TipoAsiento.CasoAbierto, null, """{"numeroExpediente":"EXP-1"}""", "ana",
+            new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero).AddTicks(1234560), HashSha256.Genesis, default);
+
+    public const string HashDelVector = "5949e6267194282c3eaaac6e9730ed1779ab2fd20d3b20d1bc02cbe04dec2b0a";
+
+    [Fact]
+    public void El_hash_canonico_coincide_con_el_vector_publicado()
+    {
+        Assert.Equal(HashDelVector, AsientoDelVector().CalcularHash().Hex);
+    }
+
     [Fact]
     public void Una_cadena_recien_asentada_verifica()
     {

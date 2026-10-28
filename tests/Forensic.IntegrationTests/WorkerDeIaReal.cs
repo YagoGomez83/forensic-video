@@ -1,6 +1,5 @@
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using DotNet.Testcontainers.Images;
 
 namespace Forensic.IntegrationTests;
 
@@ -12,11 +11,8 @@ public sealed class WorkerDeIaReal : IAsyncLifetime
 {
     private const ushort Puerto = 8000;
 
-    private readonly IFutureDockerImage _imagen = new ImageFromDockerfileBuilder()
-        .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), "src/workers/ia")
-        .WithDockerfile("Dockerfile")
-        .WithCleanUp(true)
-        .Build();
+    /// <summary>Se reusa entre corridas (ver <see cref="ImagenesDeWorkers"/>): borrarla obligaba a bajar varios GB de pip y los pesos.</summary>
+    public const string NombreDeLaImagen = "forensic-worker-ia:tests";
 
     private IContainer? _contenedor;
 
@@ -27,8 +23,8 @@ public sealed class WorkerDeIaReal : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await _imagen.CreateAsync();
-        _contenedor = new ContainerBuilder(_imagen)
+        var imagen = await ImagenesDeWorkers.ConstruirAsync("src/workers/ia", NombreDeLaImagen);
+        _contenedor = new ContainerBuilder(imagen)
             .WithPortBinding(Puerto, assignRandomHostPort: true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(Puerto).ForPath("/v1/entorno")))
             .Build();
@@ -39,7 +35,7 @@ public sealed class WorkerDeIaReal : IAsyncLifetime
     {
         if (_contenedor is not null)
             await _contenedor.DisposeAsync();
-        await _imagen.DisposeAsync();
+        // La imagen no se libera: se reusa en la próxima corrida (ver ImagenesDeWorkers).
     }
 
     /// <summary>Una imagen PNG real (ruido BGR con semilla fija), generada con el OpenCV de la propia imagen.</summary>

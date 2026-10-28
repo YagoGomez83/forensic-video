@@ -1,11 +1,16 @@
 using Forensic.Application.Identidad;
+using Forensic.Domain.Comun;
 using Forensic.Domain.Identidad;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
 namespace Forensic.Infrastructure.Identidad;
 
-/// <summary>Una fila del log de auditoría de accesos. Append-only (triggers en la migración).</summary>
+/// <summary>
+/// Una fila del log de auditoría de accesos. Append-only (triggers en la migración Identidad) y
+/// encadenada por hash: Secuencia, HashAnterior y Hash los calcula la base al insertar (migración
+/// CadenaDeAccesos), así ninguna escritura puede saltearse el encadenado.
+/// </summary>
 internal sealed class RegistroDeAcceso
 {
     public long Id { get; set; }
@@ -15,6 +20,9 @@ internal sealed class RegistroDeAcceso
     public string? Detalle { get; set; }
     public string? Origen { get; set; }
     public DateTimeOffset Timestamp { get; set; }
+    public long Secuencia { get; set; }
+    public string HashAnterior { get; set; } = null!;
+    public string Hash { get; set; } = null!;
 }
 
 /// <summary>
@@ -59,6 +67,12 @@ internal sealed class ContextoDeIdentidad(DbContextOptions<ContextoDeIdentidad> 
             b.Property(r => r.Detalle).HasMaxLength(500);
             b.Property(r => r.Origen).HasMaxLength(64);
             b.HasIndex(r => new { r.Usuario, r.Timestamp });
+            // Los pone el trigger de encadenado: EF no los manda y los lee del RETURNING.
+            b.Property(r => r.Secuencia).ValueGeneratedOnAdd()
+                .Metadata.SetValueGenerationStrategy(Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.NpgsqlValueGenerationStrategy.None);
+            b.Property(r => r.HashAnterior).HasMaxLength(HashSha256.LongitudHex).IsFixedLength().ValueGeneratedOnAdd();
+            b.Property(r => r.Hash).HasMaxLength(HashSha256.LongitudHex).IsFixedLength().ValueGeneratedOnAdd();
+            b.HasIndex(r => r.Secuencia).IsUnique();
         });
     }
 }

@@ -1,9 +1,13 @@
 using Forensic.Application;
+using Forensic.Application.Custodia;
 using Forensic.Application.Identidad;
 using Forensic.Application.Operaciones;
 using Forensic.Infrastructure.Almacen;
+using Forensic.Application.Informes;
 using Forensic.Infrastructure.Identidad;
+using Forensic.Infrastructure.Informes;
 using Forensic.Infrastructure.Persistencia;
+using Forensic.Infrastructure.Sellado;
 using Forensic.Infrastructure.Workers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -31,12 +35,22 @@ public static class DependencyInjection
         services.AddScoped<RepositorioDeUsuarios>();
         services.AddScoped<IRepositorioDeUsuarios>(sp => sp.GetRequiredService<RepositorioDeUsuarios>());
         services.AddScoped<IAuditoriaDeAccesos>(sp => sp.GetRequiredService<RepositorioDeUsuarios>());
+        services.AddScoped<ILectorDeAuditoriaDeAccesos, LectorDeAuditoriaDeAccesos>();
         services.AddSingleton<IHasheadorDeContrasena, HasheadorArgon2id>();
         services.AddOptions<OpcionesJwt>().Bind(configuration.GetSection(OpcionesJwt.Seccion));
         services.AddSingleton<IEmisorDeTokens, EmisorDeTokensJwt>();
 
         services.AddOptions<OpcionesAlmacen>().Bind(configuration.GetSection(OpcionesAlmacen.Seccion));
         services.AddSingleton<IAlmacenDeEvidencia, AlmacenDeEvidenciaEnDisco>();
+
+        // Sellado de la cadena: la clave del laboratorio es el secreto crítico; sin ella el servidor no arranca.
+        services.AddOptions<OpcionesSellado>().Bind(configuration.GetSection(OpcionesSellado.Seccion));
+        services.AddSingleton<IFirmanteDeCadena>(sp =>
+            FirmanteEd25519.DesdeArchivo(sp.GetRequiredService<IOptions<OpcionesSellado>>().Value.RutaClavePrivada));
+        services.AddSingleton<IAlmacenDeSellos, AlmacenDeSellosEnDisco>();
+        services.AddHostedService<SelladorPeriodico>();
+
+        services.AddSingleton<IRedactorDeInformes, RedactorDePdf>();
 
         services.AddOptions<OpcionesWorkerIngesta>().Bind(configuration.GetSection(OpcionesWorkerIngesta.Seccion));
         services.AddHttpClient<IWorkerDeIngesta, WorkerDeIngestaHttp>((sp, http) =>

@@ -1,0 +1,2 @@
+# Los scripts de shell siempre con LF: con CRLF, bash falla en Windows (Git Bash) y en los contenedores.
+*.sh text eol=lf

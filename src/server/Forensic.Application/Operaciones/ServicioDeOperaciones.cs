@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Forensic.Application.Custodia;
 using Forensic.Application.Evidencias;
 using Forensic.Application.Ia;
 using Forensic.Domain.Casos;
@@ -40,6 +41,7 @@ public sealed class ServicioDeOperaciones(
     IWorkerDeProcesamiento worker,
     IActorActual actorActual,
     TimeProvider reloj,
+    VerificadorDeCadena verificador,
     ILogger<ServicioDeOperaciones> logger)
 {
     /// <summary>
@@ -158,11 +160,8 @@ public sealed class ServicioDeOperaciones(
         if (derivado.EsOriginal)
             throw new ExcepcionDeDominio("Un original no salió de ninguna operación: no hay nada que reproducir.");
 
-        var cadena = await persistencia.ObtenerCadenaAsync(casoId, ct);
-        var verificacion = RegistroDeCustodia.Verificar(casoId, cadena);
-        if (!verificacion.EsIntegra)
-            throw new CadenaComprometidaException(
-                $"La cadena del caso no verifica (asiento {verificacion.SecuenciaRota}: {verificacion.Motivo}); no se reproduce.");
+        // Íntegra y coincidente con sus sellos: si no, el asiento del que se reproduce no es confiable.
+        var cadena = await verificador.ObtenerConfiableAsync(casoId, ct);
         if (cadena.SingleOrDefault(a => a.Tipo == TipoAsiento.OperacionIaAplicada && a.EvidenciaId == derivado.Id) is { } deIa)
             throw new ExcepcionDeDominio(
                 $"La evidencia {evidenciaId} salió de una operación de IA: no se reproduce byte a byte (GPU y modelos no son " +
