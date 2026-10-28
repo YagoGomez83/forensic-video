@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ServicioDeSellado>();
         services.AddScoped<VerificadorDeCadena>();
         services.AddScoped<ServicioDeInformePericial>();
+        services.AddScoped<ServicioDeInformeInvestigativo>();
         services.AddScoped<ConsultaDeInformes>();
         services.AddScoped<ServicioDeIdentidad>();
         services.AddScoped<ServicioDeOperaciones>();

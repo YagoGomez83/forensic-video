@@ -20,6 +20,8 @@ public sealed record ArchivoDeInforme(Stream Contenido, string TipoDeContenido, 
 public interface IRedactorDeInformes
 {
     byte[] RedactarPericial(InformePericialParaRedactar informe);
+
+    byte[] RedactarInvestigativo(InformeInvestigativoParaRedactar informe);
 }
 
 public sealed record InformePericialParaRedactar(
@@ -33,7 +35,19 @@ public sealed record InformePericialParaRedactar(
 /// </summary>
 public sealed record EvidenciaParaRedactar(
     Guid Id, string Nombre, string Sha256, long TamanoBytes, bool Embebida, long AsientoDeOrigen,
-    Guid? EntradaId, string? Operacion, string? Parametros, string? Entorno);
+    Guid? EntradaId, string? Operacion, string? Parametros, string? Entorno, bool SoloInvestigacion = false, string? Modelo = null);
+
+/// <summary>
+/// Todo el caso, marcado «sólo investigación»: las evidencias de las dos vías, los análisis de IA con
+/// sus hallazgos descritos como lo que dijo el modelo, y la cadena completa.
+/// </summary>
+public sealed record InformeInvestigativoParaRedactar(
+    CasoDto Caso, string EmitidoPor, DateTimeOffset EmitidoEn, string ClaveDelLaboratorio, long Hasta, string HashCabeza,
+    SelloDeCadena UltimoSello, IReadOnlyList<EvidenciaParaRedactar> Evidencias, IReadOnlyList<AnalisisParaRedactar> Analisis,
+    IReadOnlyList<AsientoParaRedactar> Asientos);
+
+public sealed record AnalisisParaRedactar(
+    Guid EvidenciaId, string Tipo, string Modelo, string Actor, DateTimeOffset RegistradoEn, IReadOnlyList<string> Hallazgos);
 
 /// <summary>Un asiento de la cadena; si es opaco, sólo trae su secuencia y su hash.</summary>
 public sealed record AsientoParaRedactar(

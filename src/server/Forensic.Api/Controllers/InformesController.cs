@@ -22,7 +22,8 @@ public sealed class OpcionesDeInformes
 [ApiController]
 [Route("casos/{casoId:guid}/informes")]
 public sealed class InformesController(
-    ServicioDeInformePericial pericial, ConsultaDeInformes consulta, IOptions<OpcionesDeInformes> opciones) : ControllerBase
+    ServicioDeInformePericial pericial, ServicioDeInformeInvestigativo investigativo, ConsultaDeInformes consulta,
+    IOptions<OpcionesDeInformes> opciones) : ControllerBase
 {
     [HttpGet]
     public Task<IReadOnlyList<InformeEmitidoDto>> Listar(Guid casoId, CancellationToken ct) => consulta.ListarAsync(casoId, ct);
@@ -36,14 +37,32 @@ public sealed class InformesController(
     }
 
     [HttpGet("pericial/{secuencia:long}/pdf")]
-    public Task<IActionResult> PdfPericial(Guid casoId, long secuencia, CancellationToken ct) => ArchivoAsync(casoId, secuencia, false, ct);
+    public Task<IActionResult> PdfPericial(Guid casoId, long secuencia, CancellationToken ct) =>
+        ArchivoAsync(casoId, ServicioDeInformePericial.Tipo, secuencia, false, ct);
 
     [HttpGet("pericial/{secuencia:long}/bundle")]
-    public Task<IActionResult> BundlePericial(Guid casoId, long secuencia, CancellationToken ct) => ArchivoAsync(casoId, secuencia, true, ct);
+    public Task<IActionResult> BundlePericial(Guid casoId, long secuencia, CancellationToken ct) =>
+        ArchivoAsync(casoId, ServicioDeInformePericial.Tipo, secuencia, true, ct);
 
-    private async Task<IActionResult> ArchivoAsync(Guid casoId, long secuencia, bool bundle, CancellationToken ct)
+    /// <summary>Emite el informe investigativo (con la IA, «sólo investigación») y asienta su emisión.</summary>
+    [HttpPost("investigativo")]
+    public async Task<ActionResult<InformeEmitidoDto>> EmitirInvestigativo(Guid casoId, CancellationToken ct)
     {
-        var archivo = await consulta.AbrirPericialAsync(casoId, secuencia, bundle, ct);
+        var informe = await investigativo.EmitirAsync(casoId, opciones.Value.UmbralDeArchivoEmbebidoBytes, ct);
+        return Created($"/casos/{casoId}/informes/investigativo/{informe.Secuencia}", informe);
+    }
+
+    [HttpGet("investigativo/{secuencia:long}/pdf")]
+    public Task<IActionResult> PdfInvestigativo(Guid casoId, long secuencia, CancellationToken ct) =>
+        ArchivoAsync(casoId, ServicioDeInformeInvestigativo.Tipo, secuencia, false, ct);
+
+    [HttpGet("investigativo/{secuencia:long}/bundle")]
+    public Task<IActionResult> BundleInvestigativo(Guid casoId, long secuencia, CancellationToken ct) =>
+        ArchivoAsync(casoId, ServicioDeInformeInvestigativo.Tipo, secuencia, true, ct);
+
+    private async Task<IActionResult> ArchivoAsync(Guid casoId, string tipo, long secuencia, bool bundle, CancellationToken ct)
+    {
+        var archivo = await consulta.AbrirAsync(casoId, tipo, secuencia, bundle, ct);
         return File(archivo.Contenido, archivo.TipoDeContenido, archivo.NombreDeArchivo);
     }
 }

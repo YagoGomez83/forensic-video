@@ -21,8 +21,8 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
 
     public byte[] RedactarPericial(InformePericialParaRedactar i)
     {
-        var doc = NuevoDocumento($"Informe pericial {i.Caso.NumeroExpediente}", "Informe pericial");
-        var s = Seccion(doc, $"Informe pericial · Expediente {i.Caso.NumeroExpediente}");
+        var doc = NuevoDocumento($"Informe pericial {i.Caso.NumeroExpediente}", "Informe pericial", "admisible-en-juicio");
+        var s = Seccion(doc, $"Informe pericial · Expediente {i.Caso.NumeroExpediente}", encabezado: null);
 
         s.AddParagraph("INFORME PERICIAL", "Titulo");
         s.AddParagraph(
@@ -77,11 +77,69 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
         return Renderizar(doc);
     }
 
-    private static Document NuevoDocumento(string titulo, string asunto)
+    public byte[] RedactarInvestigativo(InformeInvestigativoParaRedactar i)
+    {
+        const string Marca = "SÓLO INVESTIGACIÓN — NO ES PRUEBA";
+        var doc = NuevoDocumento(
+            $"Informe investigativo {i.Caso.NumeroExpediente} ({Marca})", "Informe investigativo, sólo investigación", "solo-investigacion");
+        var s = Seccion(doc, $"Informe investigativo · {Marca} · Expediente {i.Caso.NumeroExpediente}", encabezado: Marca);
+
+        s.AddParagraph("INFORME INVESTIGATIVO", "Titulo");
+        s.AddParagraph(
+            "SÓLO INVESTIGACIÓN. NO ES PRUEBA. Este informe incluye material producido o tocado por inteligencia artificial " +
+            "(detección, OCR, super-resolución). Sirve como pista para la investigación y nunca puede presentarse como prueba: " +
+            "lo admisible en juicio se presenta únicamente en el informe pericial, que es otro documento.",
+            "Aclaracion");
+
+        s.AddParagraph("1. Datos del caso y de la emisión", "Heading1");
+        Datos(s,
+            ("Expediente", i.Caso.NumeroExpediente),
+            ("Descripción", i.Caso.Descripcion),
+            ("Id del caso", i.Caso.Id.ToString("D")),
+            ("Emitido por", i.EmitidoPor),
+            ("Emitido en (UTC, servidor)", Fecha(i.EmitidoEn)),
+            ("Cadena cubierta", $"asientos 1 a {i.Hasta}"),
+            ("Hash de cabeza", i.HashCabeza));
+
+        s.AddParagraph($"2. Evidencias del caso ({i.Evidencias.Count})", "Heading1");
+        foreach (var e in i.Evidencias)
+            Evidencia(s, e, conVia: true);
+
+        s.AddParagraph($"3. Análisis de IA ({i.Analisis.Count})", "Heading1");
+        s.AddParagraph(
+            "Cada hallazgo es lo que dijo el modelo, con su confianza; no es un hecho comprobado.", "Nota");
+        foreach (var a in i.Analisis)
+        {
+            Datos(s,
+                ("Evidencia", a.EvidenciaId.ToString("D")),
+                ("Análisis", a.Tipo),
+                ("Modelo", a.Modelo),
+                ("Registrado", $"{Fecha(a.RegistradoEn)} por {a.Actor}"),
+                ("Hallazgos", a.Hallazgos.Count == 0 ? "el modelo no reportó hallazgos" : string.Join('\n', a.Hallazgos)));
+        }
+
+        s.AddParagraph("4. Cadena de custodia completa", "Heading1");
+        Cadena(s, i.Asientos);
+
+        s.AddParagraph("5. Sello del laboratorio y verificación", "Heading1");
+        Datos(s,
+            ("Último sello", $"secuencia {i.UltimoSello.Secuencia}"),
+            ("Hash sellado", i.UltimoSello.HashCabeza.Hex),
+            ("Sellado en (UTC)", Fecha(i.UltimoSello.SelladoEn)),
+            ("Clave del laboratorio", i.ClaveDelLaboratorio),
+            ("Firma (Ed25519, base64)", Convert.ToBase64String(i.UltimoSello.Firma)));
+        s.AddParagraph("verificador --clave <huella> --exigir investigativo [--externos <carpeta>] <bundle.zip>", "Codigo");
+        s.AddParagraph("El verificador anuncia este bundle como «sólo investigación» y lo rechaza si se le exige un pericial.", "Nota");
+
+        return Renderizar(doc);
+    }
+
+    private static Document NuevoDocumento(string titulo, string asunto, string palabrasClave)
     {
         var doc = new Document();
         doc.Info.Title = titulo;
         doc.Info.Subject = asunto;
+        doc.Info.Keywords = palabrasClave;
         doc.Info.Author = "forensic-video";
 
         var normal = doc.Styles[StyleNames.Normal]!;
@@ -117,13 +175,22 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
         return doc;
     }
 
-    private static Section Seccion(Document doc, string pie)
+    private static Section Seccion(Document doc, string pie, string? encabezado)
     {
         var s = doc.AddSection();
         s.PageSetup = doc.DefaultPageSetup.Clone();
         s.PageSetup.PageFormat = PageFormat.A4;
         s.PageSetup.LeftMargin = s.PageSetup.RightMargin = Unit.FromCentimeter(2);
         s.PageSetup.TopMargin = s.PageSetup.BottomMargin = Unit.FromCentimeter(2);
+        if (encabezado is not null)
+        {
+            var franja = s.Headers.Primary.AddParagraph(encabezado);
+            franja.Format.Font.Bold = true;
+            franja.Format.Font.Size = 11;
+            franja.Format.Alignment = ParagraphAlignment.Center;
+            franja.Format.Shading.Color = Colors.Black;
+            franja.Format.Font.Color = Colors.White;
+        }
         var p = s.Footers.Primary.AddParagraph();
         p.Format.Font.Size = 7;
         p.AddText($"{pie} · página ");
@@ -145,13 +212,17 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
         {
             var fila = t.AddRow();
             fila.Cells[0].AddParagraph(clave).Format.Font.Bold = true;
-            Celda(fila.Cells[1], valor, mono: EsTecnico(valor));
+            Celda(fila.Cells[1], valor, mono: CamposTecnicos.Contains(clave));
         }
         s.AddParagraph();
     }
 
-    private static bool EsTecnico(string valor) =>
-        valor.Length >= 32 && !valor.Contains(' ');
+    // Hashes, ids, firmas y JSON asentado: en monoespaciada y con cortes, para leerlos y compararlos.
+    private static readonly HashSet<string> CamposTecnicos =
+    [
+        "Id", "Id del caso", "SHA-256", "Hash de cabeza", "Hash sellado", "Clave del laboratorio", "Firma (Ed25519, base64)",
+        "Parámetros", "Entorno", "Evidencia",
+    ];
 
     private static void Celda(Cell celda, string valor, bool mono)
     {
@@ -170,11 +241,18 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
         }
         else
         {
-            p.AddText(valor);
+            var lineas = valor.Split('\n');
+            for (var i = 0; i < lineas.Length; i++)
+            {
+                if (i > 0)
+                    p.AddLineBreak();
+                p.AddText(lineas[i]);
+            }
         }
     }
 
-    private static void Evidencia(Section s, EvidenciaParaRedactar e)
+    /// <param name="conVia">En el investigativo cada evidencia muestra su vía; en el pericial todas son admisibles.</param>
+    private static void Evidencia(Section s, EvidenciaParaRedactar e, bool conVia = false)
     {
         var filas = new List<(string, string)>
         {
@@ -184,6 +262,8 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
             ("Tamaño", $"{e.TamanoBytes.ToString("N0", Miles)} bytes"),
             ("En el bundle", e.Embebida ? "embebida" : "se entrega aparte (se verifica por hash)"),
         };
+        if (conVia)
+            filas.Insert(0, ("Vía", e.SoloInvestigacion ? "SÓLO INVESTIGACIÓN (tocada por IA): no es prueba" : "admisible en juicio"));
         if (e.Operacion is null)
         {
             filas.Add(("Origen", $"original, ingestado en el asiento {e.AsientoDeOrigen}"));
@@ -192,6 +272,8 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
         {
             filas.Add(("Origen", $"derivado de {e.EntradaId:D} por la operación {e.Operacion}, asiento {e.AsientoDeOrigen}"));
             filas.Add(("Parámetros", e.Parametros!));
+            if (e.Modelo is not null)
+                filas.Add(("Modelo de IA", e.Modelo));
             filas.Add(("Entorno", e.Entorno!));
         }
         Datos(s, [.. filas]);
@@ -224,7 +306,7 @@ internal sealed class RedactorDePdf : IRedactorDeInformes
             {
                 fila.Cells[1].AddParagraph(a.Tipo!);
                 fila.Cells[2].AddParagraph(a.Actor!);
-                fila.Cells[3].AddParagraph(Fecha(a.Timestamp!.Value));
+                fila.Cells[3].AddParagraph(a.Timestamp!.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.ffffff", Invariante));
             }
             Celda(fila.Cells[4], a.Hash, mono: true);
         }
