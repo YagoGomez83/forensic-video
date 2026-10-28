@@ -3,6 +3,7 @@ using Forensic.Api;
 using Forensic.Api.Controllers;
 using Forensic.Api.Identidad;
 using Forensic.Application;
+using Forensic.Application.Custodia;
 using Forensic.Application.Identidad;
 using Forensic.Infrastructure;
 using Forensic.Infrastructure.Identidad;
@@ -35,6 +36,10 @@ builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 var app = builder.Build();
+
+// La clave de sellado se carga ya: sin ella (o con una que no es Ed25519) el servidor no arranca.
+var firmante = app.Services.GetRequiredService<IFirmanteDeCadena>();
+app.Logger.LogInformation("Clave de sellado de la cadena: {ClaveId}", firmante.ClaveId);
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();

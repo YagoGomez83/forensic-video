@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<ServicioDeCasos>();
         services.AddScoped<ServicioDeEvidencias>();
         services.AddScoped<ServicioDeCustodia>();
+        services.AddScoped<ServicioDeSellado>();
         services.AddScoped<ServicioDeIdentidad>();
         services.AddScoped<ServicioDeOperaciones>();
         services.AddScoped<ServicioDeAnalisisIa>();

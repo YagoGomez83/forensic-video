@@ -30,6 +30,11 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
 
     public string RutaAlmacen { get; } = Path.Combine(Path.GetTempPath(), "forensic-video-tests", Guid.NewGuid().ToString("N"));
 
+    public string RutaSellos { get; } = Path.Combine(Path.GetTempPath(), "forensic-video-tests", "sellos-" + Guid.NewGuid().ToString("N"));
+
+    /// <summary>Clave de sellado efímera, sólo de este servidor de tests.</summary>
+    public string RutaClaveDeSellado { get; } = ClaveDePrueba.EnArchivoTemporal();
+
     public string CadenaDeConexion => _postgres.GetConnectionString();
 
     public async Task InitializeAsync() => await _postgres.StartAsync();
@@ -38,12 +43,22 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
     {
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
-        if (Directory.Exists(RutaAlmacen))
+        foreach (var dir in new[] { RutaAlmacen, RutaSellos })
         {
-            foreach (var f in Directory.EnumerateFiles(RutaAlmacen, "*", SearchOption.AllDirectories))
+            if (!Directory.Exists(dir))
+                continue;
+            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
                 File.SetAttributes(f, FileAttributes.Normal);
-            Directory.Delete(RutaAlmacen, recursive: true);
+            Directory.Delete(dir, recursive: true);
         }
+        File.Delete(RutaClaveDeSellado);
+    }
+
+    /// <summary>Una vuelta del sellado periódico, que en los tests está apagado.</summary>
+    public async Task SellarPendientesAsync()
+    {
+        using var scope = Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ServicioDeSellado>().SellarPendientesAsync(CancellationToken.None);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -52,6 +67,9 @@ public sealed class ServidorForense : WebApplicationFactory<Program>, IAsyncLife
         builder.UseSetting("ConnectionStrings:Forense", _postgres.GetConnectionString());
         builder.UseSetting("AlmacenDeEvidencia:RutaRaiz", RutaAlmacen);
         builder.UseSetting("Persistencia:MigrarAlIniciar", "true");
+        builder.UseSetting("Custodia:Sellado:RutaClavePrivada", RutaClaveDeSellado);
+        builder.UseSetting("Custodia:Sellado:RaizDeSellos", RutaSellos);
+        builder.UseSetting("Custodia:Sellado:Intervalo", "00:00:00");
         builder.UseSetting("Identidad:Jwt:ClaveDeFirma", ClaveDeFirma);
         builder.UseSetting("Identidad:AdminInicial:Usuario", AdminInicial);
         builder.UseSetting("Identidad:AdminInicial:Contrasena", ContrasenaInicialDelAdmin);

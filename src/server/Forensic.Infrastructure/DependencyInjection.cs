@@ -1,9 +1,11 @@
 using Forensic.Application;
+using Forensic.Application.Custodia;
 using Forensic.Application.Identidad;
 using Forensic.Application.Operaciones;
 using Forensic.Infrastructure.Almacen;
 using Forensic.Infrastructure.Identidad;
 using Forensic.Infrastructure.Persistencia;
+using Forensic.Infrastructure.Sellado;
 using Forensic.Infrastructure.Workers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -37,6 +39,13 @@ public static class DependencyInjection
 
         services.AddOptions<OpcionesAlmacen>().Bind(configuration.GetSection(OpcionesAlmacen.Seccion));
         services.AddSingleton<IAlmacenDeEvidencia, AlmacenDeEvidenciaEnDisco>();
+
+        // Sellado de la cadena: la clave del laboratorio es el secreto crítico; sin ella el servidor no arranca.
+        services.AddOptions<OpcionesSellado>().Bind(configuration.GetSection(OpcionesSellado.Seccion));
+        services.AddSingleton<IFirmanteDeCadena>(sp =>
+            FirmanteEd25519.DesdeArchivo(sp.GetRequiredService<IOptions<OpcionesSellado>>().Value.RutaClavePrivada));
+        services.AddSingleton<IAlmacenDeSellos, AlmacenDeSellosEnDisco>();
+        services.AddHostedService<SelladorPeriodico>();
 
         services.AddOptions<OpcionesWorkerIngesta>().Bind(configuration.GetSection(OpcionesWorkerIngesta.Seccion));
         services.AddHttpClient<IWorkerDeIngesta, WorkerDeIngestaHttp>((sp, http) =>

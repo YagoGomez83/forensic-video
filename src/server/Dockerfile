@@ -13,6 +13,11 @@ COPY --from=build /publicar .
 RUN mkdir -p /datos/evidencia && chown app:app /datos/evidencia
 ENV AlmacenDeEvidencia__RutaRaiz=/datos/evidencia
 
+# Sellos de la cadena: otro volumen, separado de la base y de la evidencia. La clave privada no va en
+# la imagen: llega como secreto montado (Custodia__Sellado__RutaClavePrivada).
+RUN mkdir -p /datos/sellos && chown app:app /datos/sellos
+ENV Custodia__Sellado__RaizDeSellos=/datos/sellos
+
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Forensic.Api.dll"]

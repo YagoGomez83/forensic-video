@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Claves privadas (la de sellado de la cadena se genera y guarda fuera del repo)
+*.pem
+*.key
+
 # User-specific files
 *.rsuser
 *.suo

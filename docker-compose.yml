@@ -32,10 +32,16 @@ services:
       WorkerIngesta__UrlBase: http://worker-ingest:8000
       # Operaciones deterministas de OpenCV. Sin él no hay derivados (503), pero la custodia sigue.
       WorkerProcesamiento__UrlBase: http://worker-procesamiento:8000
+      # Sellado de la cadena con la clave del laboratorio: sin ella el servidor no arranca.
+      Custodia__Sellado__RutaClavePrivada: /run/secrets/clave-sellado
+    secrets:
+      - clave-sellado
     ports:
       - "127.0.0.1:5065:8080"
     volumes:
       - evidencia:/datos/evidencia
+      # En producción, un volumen que el administrador de PostgreSQL no pueda escribir.
+      - sellos:/datos/sellos
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,3 +82,8 @@ services:
 volumes:
   postgres-datos:
   evidencia:
+  sellos:
+
+secrets:
+  clave-sellado:
+    file: ${CLAVE_SELLADO_ARCHIVO:?Definí CLAVE_SELLADO_ARCHIVO en .env}
