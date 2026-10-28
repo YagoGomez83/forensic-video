@@ -89,6 +89,34 @@ jobs:
       - run: python scripts/descargar_modelos.py
       - run: pytest
 
+  verificador:
+    name: Verificador independiente (Go, vet + test + binarios)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/verificador
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      # Lo que se entrega a un perito de contraparte: binarios estáticos, sin dependencias.
+      - name: Binarios
+        run: |
+          for p in windows/amd64 linux/amd64 linux/arm64 darwin/arm64; do
+            os=${p%/*}; arq=${p#*/}; ext=""; [ "$os" = windows ] && ext=.exe
+            GOOS=$os GOARCH=$arq CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_SHA::12}"               -o "dist/verificador-$os-$arq$ext" .
+          done
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verificador
+          path: tools/verificador/dist/
+
   imagen-worker-ia:
     name: Imagen del worker de IA (red cortada + Trivy)
     runs-on: ubuntu-latest
@@ -139,11 +167,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lenguaje: [csharp, python]
+        include:
+          - { lenguaje: csharp, modo: none }
+          - { lenguaje: python, modo: none }
+          - { lenguaje: go, modo: manual }
     steps:
       - uses: actions/checkout@v4
+      - if: matrix.lenguaje == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.lenguaje }}
-          build-mode: none
+          build-mode: ${{ matrix.modo }}
+      - if: matrix.lenguaje == 'go'
+        working-directory: tools/verificador
+        run: go build ./...
       - uses: github/codeql-action/analyze@v3
