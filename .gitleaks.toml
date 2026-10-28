@@ -1,0 +1,12 @@
+# Escaneo de secretos (gitleaks) sobre todo el historial: es un gate del CI.
+# Las reglas por defecto, más excepciones acotadas por regla y por archivo, cada una justificada.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fixtures de tests: el molde PEM que arma claves efímeras y una clave EC de juguete para probar el rechazo de una clave que no es Ed25519. Ninguna es una clave real."
+targetRules = ["private-key"]
+paths = [
+    '''^tests/Forensic\.IntegrationTests/ClaveDePrueba\.cs$''',
+    '''^tests/Forensic\.IntegrationTests/FirmanteEd25519Tests\.cs$''',
+]

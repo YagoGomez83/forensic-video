@@ -1,0 +1,13 @@
+# Las acciones del CI van fijadas por SHA y las imágenes base por digest; Dependabot propone las
+# actualizaciones, que se revisan como cualquier cambio de la cadena de suministro (y, en el worker de
+# procesamiento, cambian el entorno asentado de las operaciones nuevas).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/publicar-y-firmar"]
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directories: ["/src/server", "/src/workers/ingest", "/src/workers/procesamiento", "/src/workers/ia"]
+    schedule:
+      interval: weekly

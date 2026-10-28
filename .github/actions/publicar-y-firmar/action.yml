@@ -1,0 +1,59 @@
+name: Publicar y firmar una imagen
+description: >
+  Publica una imagen ya construida y escaneada en GHCR, la firma con cosign sin claves (OIDC de GitHub
+  Actions, Sigstore), le adjunta su SBOM CycloneDX como atestación y verifica la firma contra la
+  identidad de este workflow en main. Se firma por digest, nunca por tag.
+inputs:
+  imagen-local:
+    description: Nombre local de la imagen construida (p. ej. forensic-servidor:ci).
+    required: true
+  nombre:
+    description: Nombre de la imagen en GHCR, bajo ghcr.io/<owner>/<repo>/.
+    required: true
+outputs:
+  referencia:
+    description: La imagen publicada por digest (ghcr.io/…@sha256:…).
+    value: ${{ steps.publicar.outputs.referencia }}
+runs:
+  using: composite
+  steps:
+    - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      with:
+        cosign-release: v3.1.3
+    - id: publicar
+      shell: bash
+      env:
+        IMAGEN_LOCAL: ${{ inputs.imagen-local }}
+        NOMBRE: ${{ inputs.nombre }}
+      run: |
+        imagen="ghcr.io/${GITHUB_REPOSITORY,,}/$NOMBRE"
+        docker tag "$IMAGEN_LOCAL" "$imagen:sha-${GITHUB_SHA::12}"
+        docker tag "$IMAGEN_LOCAL" "$imagen:main"
+        docker push --quiet "$imagen:sha-${GITHUB_SHA::12}"
+        docker push --quiet "$imagen:main"
+        referencia=$(docker inspect --format '{{index .RepoDigests 0}}' "$imagen:sha-${GITHUB_SHA::12}")
+        echo "referencia=$referencia" >> "$GITHUB_OUTPUT"
+    - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        scan-type: image
+        image-ref: ${{ inputs.imagen-local }}
+        format: cyclonedx
+        output: sbom.cdx.json
+    - shell: bash
+      env:
+        REFERENCIA: ${{ steps.publicar.outputs.referencia }}
+      run: |
+        cosign sign --yes "$REFERENCIA"
+        cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "$REFERENCIA"
+        # Lo mismo que tiene que correr quien despliega (scripts/verificar-imagenes.sh).
+        identidad="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main"
+        cosign verify "$REFERENCIA" --certificate-identity "$identidad" \
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+        cosign verify-attestation "$REFERENCIA" --type cyclonedx --certificate-identity "$identidad" \
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+        echo "Firmada y verificada: \`$REFERENCIA\`" >> "$GITHUB_STEP_SUMMARY"
