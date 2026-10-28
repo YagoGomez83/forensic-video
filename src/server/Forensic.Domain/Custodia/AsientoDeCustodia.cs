@@ -95,13 +95,16 @@ public sealed class AsientoDeCustodia
         Campo(sb, "tipo", Tipo.ToString());
         Campo(sb, "evidencia", EvidenciaId?.ToString("D") ?? "");
         Campo(sb, "actor", Actor);
-        Campo(sb, "timestamp", Timestamp.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", CultureInfo.InvariantCulture));
+        Campo(sb, "timestamp", TimestampCanonico(Timestamp));
         Campo(sb, "anterior", HashAnterior.Hex);
         Campo(sb, "detalle", Detalle);
         return HashSha256.Calcular(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
-    private static void Campo(StringBuilder sb, string nombre, string valor) =>
+    internal static string TimestampCanonico(DateTimeOffset instante) =>
+        instante.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", CultureInfo.InvariantCulture);
+
+    internal static void Campo(StringBuilder sb, string nombre, string valor) =>
         sb.Append(nombre).Append(':')
           .Append(Encoding.UTF8.GetByteCount(valor).ToString(CultureInfo.InvariantCulture)).Append(':')
           .Append(valor).Append('\n');
