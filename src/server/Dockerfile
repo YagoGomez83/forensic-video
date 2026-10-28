@@ -6,7 +6,7 @@ COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/server/ src/server/
 RUN dotnet publish src/server/Forensic.Api/Forensic.Api.csproj -c Release -o /publicar
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:ea721098d6ea2894ff9bd8387821a1659d4765d6c014b8d648bb1da16f016f5a
+FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:de0ee358cdd672f7017a003bed21e9ac9ed48a27c922a59b18175b6e82fa7fee
 WORKDIR /app
 COPY --from=build /publicar .
 
