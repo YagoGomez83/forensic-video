@@ -34,10 +34,18 @@ services:
       WorkerProcesamiento__UrlBase: http://worker-procesamiento:8000
       # Sellado de la cadena con la clave del laboratorio: sin ella el servidor no arranca.
       Custodia__Sellado__RutaClavePrivada: /run/secrets/clave-sellado
+      # mTLS con las workstations: sólo entra un equipo con un certificado de la CA del laboratorio.
+      # Sin estos tres, en Production el servidor no arranca (scripts/generar-certificados-mtls.sh).
+      Tls__CertificadoServidor: /run/secrets/tls-servidor.crt
+      Tls__ClaveServidor: /run/secrets/tls-servidor.key
+      Tls__CaDeClientes: /run/secrets/tls-ca.crt
     secrets:
       - clave-sellado
+      - tls-servidor.crt
+      - tls-servidor.key
+      - tls-ca.crt
     ports:
-      - "127.0.0.1:5065:8080"
+      - "127.0.0.1:5065:8443"
     volumes:
       - evidencia:/datos/evidencia
       # En producción, un volumen que el administrador de PostgreSQL no pueda escribir.
@@ -87,3 +95,9 @@ volumes:
 secrets:
   clave-sellado:
     file: ${CLAVE_SELLADO_ARCHIVO:?Definí CLAVE_SELLADO_ARCHIVO en .env}
+  tls-servidor.crt:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/servidor.crt
+  tls-servidor.key:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/servidor.key
+  tls-ca.crt:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/ca.crt

@@ -19,5 +19,6 @@ RUN mkdir -p /datos/sellos && chown app:app /datos/sellos
 ENV Custodia__Sellado__RaizDeSellos=/datos/sellos
 
 USER app
-EXPOSE 8080
+# Sólo HTTPS con mTLS (Tls__*); los certificados llegan como secretos montados.
+EXPOSE 8443
 ENTRYPOINT ["dotnet", "Forensic.Api.dll"]

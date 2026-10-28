@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Forensic.Api;
 using Forensic.Api.Controllers;
 using Forensic.Api.Identidad;
+using Forensic.Api.Seguridad;
 using Forensic.Application;
 using Forensic.Application.Custodia;
 using Forensic.Application.Identidad;
@@ -10,6 +11,16 @@ using Forensic.Infrastructure.Identidad;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// mTLS con las workstations. En Production es obligatorio, salvo que se apague a propósito (Tls:SinTls).
+var tls = builder.Configuration.GetSection(OpcionesTls.Seccion).Get<OpcionesTls>() ?? new OpcionesTls();
+if (tls.Configurado)
+    builder.WebHost.ConfigureKestrel(k => Mtls.ConfigurarKestrel(
+        k, tls, k.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Mtls).FullName!)));
+else if (builder.Environment.IsProduction() && !tls.SinTls)
+    throw new InvalidOperationException(
+        "En Production el servidor exige mTLS: definí Tls:CertificadoServidor, Tls:ClaveServidor y Tls:CaDeClientes " +
+        "(ver scripts/generar-certificados-mtls.sh), o Tls:SinTls=true si un proxy termina el mTLS.");
 
 builder.Services.AddAplicacion();
 builder.Services.AddInfraestructura(builder.Configuration);
@@ -39,6 +50,9 @@ builder.Services.AddControllers()
 var app = builder.Build();
 
 // La clave de sellado se carga ya: sin ella (o con una que no es Ed25519) el servidor no arranca.
+if (builder.Environment.IsProduction() && tls.SinTls)
+    app.Logger.LogWarning("Tls:SinTls: el servidor no hace mTLS. Sólo es válido detrás de un proxy que lo termine.");
+
 var firmante = app.Services.GetRequiredService<IFirmanteDeCadena>();
 app.Logger.LogInformation("Clave de sellado de la cadena: {ClaveId}", firmante.ClaveId);
 
