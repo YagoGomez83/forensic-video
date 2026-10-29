@@ -1,2 +1,6 @@
 # Los scripts de shell siempre con LF: con CRLF, bash falla en Windows (Git Bash) y en los contenedores.
 *.sh text eol=lf
+
+# Go siempre con LF: con CRLF (autocrlf en Windows) el binario del verificador cambia y deja de ser
+# reproducible contra el publicado; gofmt además lo marca.
+*.go text eol=lf
