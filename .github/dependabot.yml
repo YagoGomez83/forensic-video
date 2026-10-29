@@ -7,7 +7,21 @@ updates:
     directories: ["/", "/.github/actions/publicar-y-firmar"]
     schedule:
       interval: weekly
+    groups:
+      # Todos los pasos de github/codeql-action tienen que ir en la misma versión: si sube sólo init,
+      # analyze y upload-sarif fallan.
+      codeql:
+        patterns: ["github/codeql-action*"]
   - package-ecosystem: docker
     directories: ["/src/server", "/src/workers/ingest", "/src/workers/procesamiento", "/src/workers/ia"]
     schedule:
       interval: weekly
+    ignore:
+      # Cambiar de .NET (global.json fija el SDK 8) o de Python (3.12, el entorno asentado de las
+      # operaciones) es una decisión de diseño, no una actualización: sólo llegan los digests nuevos.
+      - dependency-name: "dotnet/sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "dotnet/aspnet"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
