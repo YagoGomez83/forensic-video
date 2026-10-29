@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: forense
       POSTGRES_USER: forense
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}  # ggignore: se interpola desde .env, no es un secreto
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
