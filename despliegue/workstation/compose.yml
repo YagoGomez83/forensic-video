@@ -1,0 +1,26 @@
+# Worker de IA (sólo investigación) en la workstation del analista. Sólo lo llama el cliente local
+# (FORENSIC_WORKER_IA, por defecto http://127.0.0.1:8100), nunca el servidor. Imagen publicada y firmada
+# por el CI de main, por digest; antes de desplegar:
+#   scripts/verificar-imagenes.sh $(grep -o 'ghcr.io/[^ ]*@sha256:[0-9a-f]*' despliegue/workstation/compose.yml)
+#
+#   docker compose -f despliegue/workstation/compose.yml up -d
+#
+# Requiere nvidia-container-toolkit (driver >= 580). Sin GPU, quitar el bloque deploy: cae a CPU con los
+# mismos pesos y el proveedor efectivo queda en el reporte de cada análisis.
+services:
+  worker-ia:
+    image: ghcr.io/yagogomez83/forensic-video/worker-ia:sha-169d944ea2c6@sha256:d67e683ea2bd6a6654fe41a8b6e781cab433837266cd436b565e8f8b94d59f49
+    ports:
+      - "127.0.0.1:8100:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
