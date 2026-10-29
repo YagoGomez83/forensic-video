@@ -118,4 +118,11 @@ go test ./...
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o verificador .
 ```
 
-Para comparar su compilación con un binario publicado, use la versión de Go que figura en las notas del release y las mismas opciones que el workflow (`.github/workflows/release-verificador.yml`), incluida `-X main.version=<versión>-<los 12 primeros caracteres del commit>` (lo que imprime `--version` del binario publicado, por ejemplo `v1.0.0-982046d06294`). Las compilaciones de Go con `-trimpath` son reproducibles: el binario tiene que salir idéntico byte a byte.
+Para comparar su compilación con un binario publicado, use la versión de Go que figura en las notas del release y las mismas opciones que el workflow (`.github/workflows/release-verificador.yml`), incluida `-X main.version=<versión>-<los 12 primeros caracteres del commit>` (lo que imprime `--version` del binario publicado, por ejemplo `v1.0.0-452ebb86e2cc`). Las compilaciones de Go con `-trimpath` son reproducibles: el binario tiene que salir idéntico byte a byte, con dos condiciones que cambian el resultado aunque el código sea el mismo:
+
+- **Compile desde un clon de git del tag**, no desde un `.zip` o un `git archive`: Go embebe en el binario el commit, su fecha y si el árbol estaba limpio, y sin `.git` no los tiene.
+- **Con los finales de línea del repositorio (LF).** En Windows, `core.autocrlf=true` convierte los `.go` a CRLF y el binario cambia. Desde `verificador-v1.1.0` el repositorio fija LF para los `.go`; para `verificador-v1.0.0`, clone con `git -c core.autocrlf=false clone --branch verificador-v1.0.0 …`.
+
+Una versión de Go distinta de la del release se pide con `GOTOOLCHAIN`, por ejemplo `GOTOOLCHAIN=go1.24.13 go build …`.
+
+Así se comprobó con `verificador-v1.0.0`: compilado en Windows con Go 1.24.13 desde un clon sin conversión de finales de línea, sale idéntico al `verificador-windows-amd64.exe` publicado (`65a2bbac…`).
