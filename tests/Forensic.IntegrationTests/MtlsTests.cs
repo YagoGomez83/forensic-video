@@ -20,6 +20,7 @@ public sealed class MtlsTests : IAsyncLifetime
 {
     private readonly CertificadosDePrueba _laboratorio = new();
     private readonly string _secretos = Path.Combine(Path.GetTempPath(), "forensic-video-tests", $"tls-{Guid.NewGuid():N}");
+    private readonly RelojDePrueba _reloj = new(DateTimeOffset.UtcNow);
     private WebApplication? _host;
     private Uri _url = null!;
 
@@ -34,19 +35,37 @@ public sealed class MtlsTests : IAsyncLifetime
     }
 
     /// <summary>Un host mínimo con la misma configuración de Kestrel que el servidor real, desde archivos PEM.</summary>
-    private async Task<Uri> LevantarAsync(X509Certificate2 certificadoDelServidor)
+    private async Task<Uri> LevantarAsync(X509Certificate2 certificadoDelServidor, byte[]? crl = null)
     {
-        var (cert, clave) = CertificadosDePrueba.EnPem(certificadoDelServidor, _secretos, "servidor");
-        var (ca, _) = CertificadosDePrueba.EnPem(_laboratorio.CaPublica, _secretos, "ca");
-        var opciones = new OpcionesTls { CertificadoServidor = cert, ClaveServidor = clave, CaDeClientes = ca, Direccion = "127.0.0.1", Puerto = 0 };
+        var opciones = Opciones(certificadoDelServidor, crl ?? _laboratorio.Crl());
 
         var builder = WebApplication.CreateSlimBuilder();
-        builder.WebHost.ConfigureKestrel(k => Mtls.ConfigurarKestrel(k, opciones, NullLogger.Instance));
+        builder.WebHost.ConfigureKestrel(k => Mtls.ConfigurarKestrel(k, opciones, NullLogger.Instance, _reloj));
         _host = builder.Build();
         _host.MapGet("/ping", () => "pong");
         await _host.StartAsync();
         var direccion = _host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
         return new Uri(direccion.Replace("127.0.0.1", "localhost") + "/");
+    }
+
+    private OpcionesTls Opciones(X509Certificate2 certificadoDelServidor, byte[] crl)
+    {
+        var (cert, clave) = CertificadosDePrueba.EnPem(certificadoDelServidor, _secretos, "servidor");
+        var (ca, _) = CertificadosDePrueba.EnPem(_laboratorio.CaPublica, _secretos, "ca");
+        EscribirCrl(crl);
+        return new OpcionesTls
+        {
+            CertificadoServidor = cert, ClaveServidor = clave, CaDeClientes = ca, CrlDeClientes = RutaDeLaCrl, Direccion = "127.0.0.1", Puerto = 0,
+        };
+    }
+
+    private string RutaDeLaCrl => Path.Combine(_secretos, "ca.crl");
+
+    /// <summary>Como el operador que copia la CRL nueva al servidor: en PEM, sobre el mismo archivo.</summary>
+    private void EscribirCrl(byte[] crl)
+    {
+        Directory.CreateDirectory(_secretos);
+        File.WriteAllText(RutaDeLaCrl, CertificadosDePrueba.CrlEnPem(crl));
     }
 
     private HttpClient Cliente(X509Certificate2? certificado, X509Certificate2? caDelServidor = null) =>
@@ -125,9 +144,91 @@ public sealed class MtlsTests : IAsyncLifetime
         var opciones = new OpcionesTls { CertificadoServidor = Path.Combine(_secretos, "servidor.crt") };
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            Mtls.ConfigurarKestrel(new Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions(), opciones, NullLogger.Instance));
+            Mtls.ConfigurarKestrel(new Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions(), opciones, NullLogger.Instance, _reloj));
         Assert.Contains("Tls:", ex.Message);
     }
+
+    [Fact]
+    public async Task Un_certificado_revocado_no_entra_y_los_demas_si()
+    {
+        var robada = _laboratorio.Cliente("workstation-robada");
+        await _host!.DisposeAsync();
+        _url = await LevantarAsync(_laboratorio.Servidor(), _laboratorio.Crl([robada]));
+
+        using var conLaRobada = Cliente(robada);
+        await Assert.ThrowsAsync<HttpRequestException>(() => conLaRobada.GetStringAsync("ping"));
+        using var conOtra = Cliente(_laboratorio.Cliente("workstation-02"));
+        Assert.Equal("pong", await conOtra.GetStringAsync("ping"));
+    }
+
+    [Fact]
+    public async Task Una_crl_nueva_se_aplica_sin_reiniciar_el_servidor()
+    {
+        var robada = _laboratorio.Cliente("workstation-robada");
+        using (var antes = Cliente(robada))
+            Assert.Equal("pong", await antes.GetStringAsync("ping"));
+
+        EscribirCrl(_laboratorio.Crl([robada]));
+
+        using var despues = Cliente(robada);
+        await Assert.ThrowsAsync<HttpRequestException>(() => despues.GetStringAsync("ping"));
+    }
+
+    [Fact]
+    public async Task Con_la_crl_vencida_no_entra_nadie()
+    {
+        _reloj.Ahora = DateTimeOffset.UtcNow.AddDays(366);
+
+        using var http = Cliente(_laboratorio.Cliente());
+        await Assert.ThrowsAsync<HttpRequestException>(() => http.GetStringAsync("ping"));
+    }
+
+    [Fact]
+    public async Task Si_la_crl_se_reemplaza_por_una_que_no_es_de_la_ca_no_entra_nadie()
+    {
+        File.WriteAllText(RutaDeLaCrl, CertificadosDePrueba.CrlEnPem(new CertificadosDePrueba().Crl()));
+
+        using var http = Cliente(_laboratorio.Cliente());
+        await Assert.ThrowsAsync<HttpRequestException>(() => http.GetStringAsync("ping"));
+    }
+
+    [Fact]
+    public void Sin_crl_de_clientes_el_servidor_no_arranca()
+    {
+        var opciones = Opciones(_laboratorio.Servidor(), _laboratorio.Crl());
+        opciones.CrlDeClientes = null;
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            Mtls.ConfigurarKestrel(new Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions(), opciones, NullLogger.Instance, _reloj));
+        Assert.Contains("Tls:CrlDeClientes", ex.Message);
+    }
+
+    [Fact]
+    public void Con_una_crl_de_otra_ca_el_servidor_no_arranca()
+    {
+        var opciones = Opciones(_laboratorio.Servidor(), new CertificadosDePrueba("Otra CA").Crl());
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            Mtls.ConfigurarKestrel(new Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions(), opciones, NullLogger.Instance, _reloj));
+        Assert.Contains("CRL", ex.Message);
+    }
+
+    [Fact]
+    public void Con_la_crl_vencida_el_servidor_no_arranca()
+    {
+        var opciones = Opciones(_laboratorio.Servidor(), _laboratorio.Crl(proxima: DateTimeOffset.UtcNow.AddDays(-1)));
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            Mtls.ConfigurarKestrel(new Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions(), opciones, NullLogger.Instance, _reloj));
+        Assert.Contains("venci", ex.Message);
+    }
+}
+
+internal sealed class RelojDePrueba(DateTimeOffset ahora) : TimeProvider
+{
+    public DateTimeOffset Ahora { get; set; } = ahora;
+
+    public override DateTimeOffset GetUtcNow() => Ahora;
 }
 
 /// <summary>El servidor real: en Production no arranca sin TLS salvo que se lo apague explícitamente.</summary>

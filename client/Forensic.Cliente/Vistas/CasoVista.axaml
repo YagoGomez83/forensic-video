@@ -10,6 +10,7 @@
         <Button Content="← Casos" Command="{Binding VolverCommand}" />
         <TextBlock Text="{Binding Caso.NumeroExpediente}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
         <TextBlock Text="{Binding Caso.Estado}" VerticalAlignment="Center" Opacity="0.7" />
+        <Button x:Name="Informes" Content="Informes" Command="{Binding VerInformesCommand}" VerticalAlignment="Center" />
       </StackPanel>
       <TextBlock Text="{Binding Caso.Descripcion}" TextWrapping="Wrap" />
       <TextBlock x:Name="EstadoDeLaCadena" Text="{Binding EstadoDeLaCadena}" FontWeight="SemiBold"

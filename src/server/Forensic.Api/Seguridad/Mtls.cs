@@ -25,6 +25,12 @@ public sealed class OpcionesTls
     /// <summary>La CA del laboratorio, en PEM: sólo los certificados de cliente que emitió pueden conectarse.</summary>
     public string? CaDeClientes { get; set; }
 
+    /// <summary>
+    /// La CRL de la CA del laboratorio, en PEM o DER. Obligatoria con mTLS: se relee en cada conexión, así
+    /// que revocar una workstation es copiar la CRL nueva, sin reiniciar.
+    /// </summary>
+    public string? CrlDeClientes { get; set; }
+
     public string Direccion { get; set; } = "0.0.0.0";
 
     public int Puerto { get; set; } = 8443;
@@ -36,7 +42,8 @@ public sealed class OpcionesTls
     public bool SinTls { get; set; }
 
     public bool Configurado =>
-        !string.IsNullOrWhiteSpace(CertificadoServidor) || !string.IsNullOrWhiteSpace(ClaveServidor) || !string.IsNullOrWhiteSpace(CaDeClientes);
+        !string.IsNullOrWhiteSpace(CertificadoServidor) || !string.IsNullOrWhiteSpace(ClaveServidor) || !string.IsNullOrWhiteSpace(CaDeClientes)
+        || !string.IsNullOrWhiteSpace(CrlDeClientes);
 }
 
 public static class Mtls
@@ -45,22 +52,24 @@ public static class Mtls
 
     /// <summary>
     /// Kestrel escuchando sólo en HTTPS, exigiendo certificado de cliente y aceptando únicamente los que
-    /// encadenan a la CA del laboratorio, vigentes y con uso de autenticación de cliente. El almacén de
-    /// confianza del sistema no cuenta. No se consulta revocación (no hay CRL del laboratorio): un equipo
-    /// dado de baja se excluye reemitiendo la CA o, mientras tanto, deshabilitando sus usuarios.
+    /// encadenan a la CA del laboratorio, vigentes, con uso de autenticación de cliente y que no estén en
+    /// la CRL de esa CA. El almacén de confianza del sistema no cuenta. Sin la CRL, o con una que no es de
+    /// la CA o ya vencida, no arranca.
     /// </summary>
-    public static void ConfigurarKestrel(KestrelServerOptions kestrel, OpcionesTls opciones, ILogger logger)
+    public static void ConfigurarKestrel(KestrelServerOptions kestrel, OpcionesTls opciones, ILogger logger, TimeProvider reloj)
     {
         if (string.IsNullOrWhiteSpace(opciones.CertificadoServidor) || string.IsNullOrWhiteSpace(opciones.ClaveServidor)
-            || string.IsNullOrWhiteSpace(opciones.CaDeClientes))
+            || string.IsNullOrWhiteSpace(opciones.CaDeClientes) || string.IsNullOrWhiteSpace(opciones.CrlDeClientes))
             throw new InvalidOperationException(
-                $"mTLS incompleto: definí {OpcionesTls.Seccion}:CertificadoServidor, {OpcionesTls.Seccion}:ClaveServidor y " +
-                $"{OpcionesTls.Seccion}:CaDeClientes (rutas a secretos montados; ver scripts/generar-certificados-mtls.sh).");
+                $"mTLS incompleto: definí {OpcionesTls.Seccion}:CertificadoServidor, {OpcionesTls.Seccion}:ClaveServidor, " +
+                $"{OpcionesTls.Seccion}:CaDeClientes y {OpcionesTls.Seccion}:CrlDeClientes (rutas a secretos montados; ver " +
+                "scripts/generar-certificados-mtls.sh).");
 
         var servidor = Cargar(() => X509Certificate2.CreateFromPemFile(opciones.CertificadoServidor, opciones.ClaveServidor), "del servidor");
         var ca = Cargar(() => X509Certificate2.CreateFromPem(File.ReadAllText(opciones.CaDeClientes)), "de la CA de clientes");
         // En Windows, SslStream no usa una clave efímera cargada de PEM: se re-importa desde PKCS#12.
         servidor = new X509Certificate2(servidor.Export(X509ContentType.Pkcs12));
+        var revocacion = new RevocacionDeClientes(opciones.CrlDeClientes, ca, logger, reloj);
 
         kestrel.Listen(IPAddress.Parse(opciones.Direccion), opciones.Puerto, escucha => escucha.UseHttps(https =>
         {
@@ -69,11 +78,13 @@ public static class Mtls
             https.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
             https.ClientCertificateValidation = (certificado, _, _) =>
             {
-                if (EsDeLaCa(certificado, ca))
-                    return true;
-                logger.LogWarning("Conexión rechazada: certificado de cliente que no emitió la CA del laboratorio ({Sujeto}, {Huella}).",
-                    certificado.Subject, certificado.Thumbprint);
-                return false;
+                if (!EsDeLaCa(certificado, ca))
+                {
+                    logger.LogWarning("Conexión rechazada: certificado de cliente que no emitió la CA del laboratorio ({Sujeto}, {Huella}).",
+                        certificado.Subject, certificado.Thumbprint);
+                    return false;
+                }
+                return revocacion.Admite(certificado);
             };
         }));
     }

@@ -212,6 +212,39 @@ public sealed class ClienteForense
     public Task<ExportDeCustodia> ExportarCustodiaAsync(Guid casoId, CancellationToken ct) =>
         EnviarAsync<ExportDeCustodia>(HttpMethod.Get, $"casos/{casoId}/custodia", null, ct);
 
+    /// <summary>Los informes emitidos del caso, de los dos tipos, leídos de sus asientos de emisión.</summary>
+    public Task<IReadOnlyList<InformeEmitidoDto>> ListarInformesAsync(Guid casoId, CancellationToken ct) =>
+        EnviarAsync<IReadOnlyList<InformeEmitidoDto>>(HttpMethod.Get, $"casos/{casoId}/informes", null, ct);
+
+    /// <summary>
+    /// Pide al servidor que emita un informe. El servidor decide qué entra, sella la cabeza de la cadena y
+    /// asienta la emisión: es irreversible. El cliente no arma nada.
+    /// </summary>
+    public Task<InformeEmitidoDto> EmitirInformeAsync(Guid casoId, TipoDeInforme tipo, CancellationToken ct) =>
+        EnviarAsync<InformeEmitidoDto>(HttpMethod.Post, $"casos/{casoId}/informes/{Ruta(tipo)}", null, ct);
+
+    /// <summary>
+    /// Descarga en streaming el PDF o el bundle de un informe al destino que eligió el analista, por la ruta
+    /// de su tipo. Como con la evidencia, el destino se abre recién cuando el servidor respondió OK.
+    /// </summary>
+    public async Task DescargarInformeAAsync(
+        Guid casoId, TipoDeInforme tipo, long secuencia, ArchivoDeInforme archivo, Func<Task<Stream>> abrirDestino, CancellationToken ct)
+    {
+        var cual = archivo == ArchivoDeInforme.Pdf ? "pdf" : "bundle";
+        using var peticion = new HttpRequestMessage(HttpMethod.Get, $"casos/{casoId}/informes/{Ruta(tipo)}/{secuencia}/{cual}");
+        using var respuesta = await EnviarAsync(peticion, ct, HttpCompletionOption.ResponseHeadersRead);
+        await using var origen = await respuesta.Content.ReadAsStreamAsync(ct);
+        await using var destino = await abrirDestino();
+        await origen.CopyToAsync(destino, ct);
+    }
+
+    private static string Ruta(TipoDeInforme tipo) => tipo switch
+    {
+        TipoDeInforme.Pericial => "pericial",
+        TipoDeInforme.Investigativo => "investigativo",
+        _ => throw new ArgumentOutOfRangeException(nameof(tipo), tipo, null),
+    };
+
     private async Task<T> EnviarAsync<T>(HttpMethod metodo, string ruta, object? cuerpo, CancellationToken ct)
     {
         using var peticion = new HttpRequestMessage(metodo, ruta);

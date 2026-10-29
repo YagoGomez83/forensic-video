@@ -80,3 +80,31 @@ public sealed record HallazgoDto(
 public sealed record AnalisisIaDto(
     Guid Id, Guid EvidenciaId, string Analisis, string Parametros, ModeloDeIaDto Modelo, string Entorno, string Actor,
     DateTimeOffset RegistradoEn, ViaProcesamiento Via, IReadOnlyList<HallazgoDto> Hallazgos);
+
+/// <summary>
+/// Los dos informes son caminos separados en el servidor: cada uno se emite y se descarga sólo por su
+/// propia ruta. El pericial lleva sólo lo admisible en juicio; el investigativo es «sólo investigación».
+/// </summary>
+public enum TipoDeInforme
+{
+    Pericial,
+    Investigativo,
+}
+
+/// <summary>Qué archivo de un informe: el PDF legible o el bundle verificable (forensic-video/bundle/v1).</summary>
+public enum ArchivoDeInforme
+{
+    Pdf,
+    Bundle,
+}
+
+/// <summary>Un archivo de un informe tal como lo asentó el servidor: su SHA-256 y su tamaño.</summary>
+public sealed record ArchivoDelInformeDto(string Sha256, long TamanoBytes);
+
+/// <summary>
+/// Un informe emitido, leído de su asiento de emisión (<see cref="Secuencia"/>). Su bundle cubre la cadena
+/// hasta <see cref="Hasta"/>. Los números de evidencias excluidas y asientos opacos los decide el servidor.
+/// </summary>
+public sealed record InformeEmitidoDto(
+    TipoDeInforme Tipo, long Secuencia, DateTimeOffset EmitidoEn, string EmitidoPor, long Hasta,
+    ArchivoDelInformeDto Pdf, ArchivoDelInformeDto Bundle, int Evidencias, int EvidenciasExcluidas, int AsientosOpacos);

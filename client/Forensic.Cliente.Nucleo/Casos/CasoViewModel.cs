@@ -104,6 +104,9 @@ public sealed partial class CasoViewModel(ClienteForense api, INavegacion navega
         navegacion.IrA(new Visor.VisorViewModel(api, navegacion, this, evidencia));
 
     [RelayCommand]
+    private void VerInformes() => navegacion.IrA(new Informes.InformesViewModel(api, navegacion, this));
+
+    [RelayCommand]
     private void Volver() => navegacion.IrACasos();
 
     /// <summary>El progreso llega desde el hilo que sube; se publica en el de la UI si lo hay.</summary>
