@@ -12,7 +12,8 @@ services:
     volumes:
       - postgres-datos:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U forense -d forense"]
+      # Por TCP: durante la inicialización hay un servidor temporal que sólo escucha por socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U forense -d forense"]
       interval: 5s
       retries: 10
 
