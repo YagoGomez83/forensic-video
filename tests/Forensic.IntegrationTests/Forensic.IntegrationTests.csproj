@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Vectores públicos (sin claves) generados con los scripts de openssl del repo. -->
+    <None Include="Datos\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\server\Forensic.Api\Forensic.Api.csproj" />
     <!-- Los contratos del cliente de escritorio se cruzan con el servidor real. -->
     <ProjectReference Include="..\..\client\Forensic.Cliente.Api\Forensic.Cliente.Api.csproj" />
