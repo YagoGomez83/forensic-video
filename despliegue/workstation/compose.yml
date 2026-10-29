@@ -9,7 +9,7 @@
 # mismos pesos y el proveedor efectivo queda en el reporte de cada análisis.
 services:
   worker-ia:
-    image: ghcr.io/yagogomez83/forensic-video/worker-ia:sha-169d944ea2c6@sha256:d67e683ea2bd6a6654fe41a8b6e781cab433837266cd436b565e8f8b94d59f49
+    image: ghcr.io/yagogomez83/forensic-video/worker-ia:sha-1369a69b7e2b@sha256:b49c7d9968d8ac52f759088950604ba0edf0b65d7cd50175692775e9101435bd
     ports:
       - "127.0.0.1:8100:8000"
     restart: unless-stopped
