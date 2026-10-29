@@ -17,3 +17,19 @@ YOLOX-s con los pesos reales encuentra lo que hay.
 | SHA-256 | `24f4c03c6046fe388499c8768e9a3acaf75f58f7757786fd7cbfd70483443089` (lo verifica el test) |
 
 Muestra personas reconocibles en la vía pública. No se usa fuera de los tests.
+
+## `chatham-the-brook.jpg`
+
+Foto real para `tests/test_ocr_real.py`: un cruce peatonal con el cartel «Crown House» en la pared, para
+comprobar que PP-OCRv4 con los pesos reales lee texto en una escena. El texto pintado en el piso
+(«LOOK LEFT») no se lee a la escala del modelo y el test no lo pide.
+
+| | |
+|---|---|
+| Título | The Brook pedestrian crossing - Chatham |
+| Autor | OathOn (usuario de Wikimedia Commons), obra propia, 1 de julio de 2025 |
+| Licencia | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (dominio público): se usa sin atribución obligatoria; se la da igual |
+| Commons | https://commons.wikimedia.org/wiki/File:The_Brook_pedestrian_crossing_-_Chatham.jpg |
+| Archivo | el original de Commons, sin tocar (una sola versión): 3296×2367, 2 678 380 bytes |
+| SHA-1 | `6116e6badb60a7514b383e7413921e87fa640f7f` (el que publica Commons) |
+| SHA-256 | `ed9d5e4960a944b3c49116de6cd4ee8cbb054cf1db16cd7da1bcbb9e30160144` (lo verifica el test) |
