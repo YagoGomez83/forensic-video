@@ -48,7 +48,8 @@ DOCKER_BUILDKIT=0 docker build -t forensic-worker-ia:tests src/workers/ia
 
 # Claves y certificados: siempre FUERA del repo (*.pem y *.key están en .gitignore)
 openssl genpkey -algorithm ed25519 -out <fuera del repo>/clave-sellado.pem
-scripts/generar-certificados-mtls.sh <carpeta fuera del repo> <host del servidor> workstation-01 [...]
+scripts/generar-certificados-mtls.sh <carpeta fuera del repo> <host del servidor> workstation-01 [...]   # también emite ca.crl
+scripts/revocar-certificado-mtls.sh <carpeta de la CA> [workstation]   # revoca y re-emite la CRL (sin workstation: la renueva; dura 365 días)
 scripts/verificar-imagenes.sh ghcr.io/<owner>/<repo>/servidor@sha256:...   # firma cosign + SBOM, antes de desplegar
 
 # Producción: imágenes firmadas de main, por digest (despliegue/servidor y despliegue/workstation, cada uno con su compose)
@@ -109,7 +110,7 @@ Detalles que no se ven a simple vista:
 - **Asiento `OperacionAplicada`** (`forensic-video/operacion/v1`): tipo, parámetros y entorno como JSON crudo, entrada y salida con hashes, hash de píxeles y vía. `OperacionAsentada.Desde` lo lee; basta para reproducir. `POST .../reproducir` re-ejecuta desde ese asiento (sólo con la cadena íntegra y coincidente con sus sellos) y asienta `OperacionReproducida`; `GET .../linaje` da el historial. Operación, derivado y asiento van en una sola transacción; `OperacionesForenses` es inmutable con triggers.
 - **Sellado (Fase 5):** `SelloDeCadena` (`forensic-video/sello/v1`) firma con la clave del laboratorio el hash de un eslabón; `RegistroDeCustodia.VerificarSellos` delata una cadena reconstruida entera o truncada aunque verifique por sí misma. El sellado periódico (`Custodia:Sellado:Intervalo`, 1 h; 0 lo apaga en los tests) nunca sella una cadena rota. Para algo pericial (reproducir, emitir un informe) se usa `VerificadorDeCadena.ObtenerConfiableAsync`: íntegra y coincidente con sus sellos, o 423. El export de custodia trae `sellado`.
 - **Informes (Fase 5):** el pericial y el investigativo son caminos separados (servicio, endpoint, asiento y bundle propios; cada tipo sólo se descarga por su ruta). Lo que entra al pericial lo decide **sólo** `ContenidoPericial`: una evidencia pasa por `ExigirAdmisibleEnJuicio()` y un asiento va completo sólo si su tipo está en `ContenidoPericial.TiposCompletos` y su evidencia entró; si no, opaco. Un tipo de asiento nuevo es opaco por defecto; sumarlo a la lista blanca exige cambiar también `docs/formato-bundle-v1.md` y `tiposPericiales` en el verificador (los tests de los dos lados la contrastan con el documento). Cambiar el formato del bundle exige versionarlo y actualizar los vectores de los dos lados.
-- **mTLS (Fase 5):** el servidor valida el certificado de cliente contra la CA del laboratorio (EKU de cliente, sin revocación) y el cliente (`CanalSeguro`) el del servidor contra la misma CA, con el nombre de la URL. En Windows, SslStream no usa claves efímeras: un certificado cargado de PEM se re-importa desde PKCS#12. TestServer no hace TLS: los tests de mTLS levantan Kestrel real (`MtlsTests`).
+- **mTLS (Fase 5):** el servidor valida el certificado de cliente contra la CA del laboratorio (EKU de cliente y la CRL de esa CA, `Tls:CrlDeClientes`: obligatoria, releída en cada conexión y fail-closed si vence o no es de la CA; `CrlDeClientes` la parsea con `System.Formats.Asn1`) y el cliente (`CanalSeguro`) el del servidor contra la misma CA, con el nombre de la URL. En Windows, SslStream no usa claves efímeras: un certificado cargado de PEM se re-importa desde PKCS#12. TestServer no hace TLS: los tests de mTLS levantan Kestrel real (`MtlsTests`).
 
 ## Qué es
 
