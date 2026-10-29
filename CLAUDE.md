@@ -51,6 +51,10 @@ openssl genpkey -algorithm ed25519 -out <fuera del repo>/clave-sellado.pem
 scripts/generar-certificados-mtls.sh <carpeta fuera del repo> <host del servidor> workstation-01 [...]
 scripts/verificar-imagenes.sh ghcr.io/<owner>/<repo>/servidor@sha256:...   # firma cosign + SBOM, antes de desplegar
 
+# Producción: imágenes firmadas de main, por digest (despliegue/servidor y despliegue/workstation, cada uno con su compose)
+scripts/actualizar-digests-produccion.sh <id del run de ci.yml en main>     # verifica las cuatro y reescribe los compose
+cp despliegue/servidor/.env.example despliegue/servidor/.env && docker compose -f despliegue/servidor/compose.yml up -d
+
 # Cliente de escritorio (solución propia; los tests corren headless, sin pantalla)
 dotnet test client/Forensic.Cliente.sln
 FORENSIC_SERVIDOR=http://localhost:5065/ dotnet run --project client/Forensic.Cliente   # en claro, sólo loopback
@@ -71,7 +75,7 @@ dotnet user-secrets set "Custodia:Sellado:RaizDeSellos" "<carpeta de sellos>" --
 dotnet run --project src/server/Forensic.Api      # http://localhost:5065 en Development (sin TLS), migra al iniciar
 ```
 
-Las versiones NuGet están centralizadas en `Directory.Packages.props` (los `.csproj` no llevan `Version`); EF Core va alineado a la versión que exige Npgsql (8.0.11). El SDK está fijado en `global.json`. Las dependencias Python van con versión exacta en `pyproject.toml`. **PDFsharp-MigraDoc queda en 6.2.4, la última MIT** (desde la 6.5.0 es AGPL-3.0): no subirlo sin revisar la licencia; `System.Security.Cryptography.Pkcs` va fijado en 8.0.2 por una vulnerabilidad de la 8.0.1 que trae PDFsharp. Las imágenes base van por digest en los Dockerfiles. CI (`.github/workflows/ci.yml`): build y test de todo (el job del servidor instala Go), verificador con sus binarios, Trivy de cada imagen y del repo (falla dura ante altas o críticas con arreglo), gitleaks sobre todo el historial (`.gitleaks.toml`), CodeQL `security-extended`, todas las acciones por SHA (Dependabot las actualiza) y, en main, imágenes publicadas en GHCR y firmadas con cosign (`.github/actions/publicar-y-firmar`).
+Las versiones NuGet están centralizadas en `Directory.Packages.props` (los `.csproj` no llevan `Version`); EF Core va alineado a la versión que exige Npgsql (8.0.11). El SDK está fijado en `global.json`. Las dependencias Python van con versión exacta en `pyproject.toml`. **PDFsharp-MigraDoc queda en 6.2.4, la última MIT** (desde la 6.5.0 es AGPL-3.0): no subirlo sin revisar la licencia; `System.Security.Cryptography.Pkcs` va fijado en 8.0.2 por una vulnerabilidad de la 8.0.1 que trae PDFsharp. Las imágenes base van por digest en los Dockerfiles. CI (`.github/workflows/ci.yml`): build y test de todo (el job del servidor instala Go), verificador con sus binarios, Trivy de cada imagen y del repo (falla dura ante altas o críticas con arreglo), gitleaks sobre todo el historial (`.gitleaks.toml`), CodeQL `security-extended`, todas las acciones por SHA (Dependabot las actualiza) y, en main, imágenes publicadas en GHCR y firmadas con cosign (`.github/actions/publicar-y-firmar`). Un tag `verificador-v*` sobre un commit de main publica los binarios del verificador como release, con `SHA256SUMS` firmado (`release-verificador.yml`).
 
 ## Estructura
 

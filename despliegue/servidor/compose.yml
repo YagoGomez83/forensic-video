@@ -1,0 +1,109 @@
+# Servidor de custodia en producción: PostgreSQL + servidor + workers de ingesta y de procesamiento.
+# Sólo imágenes publicadas y firmadas por el CI de main, siempre por digest (la etiqueta sha-<commit>
+# es sólo para leer de qué commit salen: con digest, Docker la ignora). Antes de desplegar:
+#   scripts/verificar-imagenes.sh $(grep -o 'ghcr.io/[^ ]*@sha256:[0-9a-f]*' despliegue/servidor/compose.yml)
+# Para pasar a las imágenes de otro run de main: scripts/actualizar-digests-produccion.sh <run id>.
+#
+#   cp despliegue/servidor/.env.example despliegue/servidor/.env    (y completarlo; ver ahí)
+#   docker compose -f despliegue/servidor/compose.yml up -d
+#
+# Lo único expuesto es el servidor, por HTTPS con mTLS. PostgreSQL y los workers viven en una red
+# interna sin salida: no publican puertos ni llegan a internet.
+services:
+  postgres:
+    image: postgres:17.11-trixie@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    environment:
+      POSTGRES_DB: forense
+      POSTGRES_USER: forense
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
+    volumes:
+      - ${POSTGRES_DIR:?Definí POSTGRES_DIR en .env}:/var/lib/postgresql/data
+    networks: [interna]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      # Por TCP: durante la inicialización hay un servidor temporal que sólo escucha por socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U forense -d forense"]
+      interval: 5s
+      retries: 10
+
+  servidor:
+    image: ghcr.io/yagogomez83/forensic-video/servidor:sha-169d944ea2c6@sha256:14ce6c170a3aa60e01f8c38608262fec80b37019299ab318f536df0a3274ed9e
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Forense: Host=postgres;Database=forense;Username=forense;Password=${POSTGRES_PASSWORD}
+      Persistencia__MigrarAlIniciar: "true"
+      # Sin clave de firma el servidor no arranca; sin ningún admin activo, tampoco sin el seed del primero.
+      Identidad__Jwt__ClaveDeFirma: ${JWT_CLAVE_DE_FIRMA:?Definí JWT_CLAVE_DE_FIRMA en .env}
+      Identidad__AdminInicial__Usuario: ${ADMIN_INICIAL_USUARIO:-}
+      Identidad__AdminInicial__Contrasena: ${ADMIN_INICIAL_CONTRASENA:-}
+      WorkerIngesta__UrlBase: http://worker-ingest:8000
+      WorkerProcesamiento__UrlBase: http://worker-procesamiento:8000
+      Custodia__Sellado__RutaClavePrivada: /run/secrets/clave-sellado
+      Tls__CertificadoServidor: /run/secrets/tls-servidor.crt
+      Tls__ClaveServidor: /run/secrets/tls-servidor.key
+      Tls__CaDeClientes: /run/secrets/tls-ca.crt
+    secrets:
+      - clave-sellado
+      - tls-servidor.crt
+      - tls-servidor.key
+      - tls-ca.crt
+    ports:
+      # Las workstations del laboratorio entran acá; sin un certificado de la CA no pasan del handshake.
+      - "${IP_SERVIDOR:?Definí IP_SERVIDOR en .env}:${PUERTO_SERVIDOR:-8443}:8443"
+    volumes:
+      # Carpetas del host, del usuario 1654 (app) del contenedor. Los sellos van en otro disco o
+      # montaje, donde el administrador de PostgreSQL no pueda escribir.
+      - ${EVIDENCIA_DIR:?Definí EVIDENCIA_DIR en .env}:/datos/evidencia
+      - ${SELLOS_DIR:?Definí SELLOS_DIR en .env}:/datos/sellos
+    networks: [interna, laboratorio]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      worker-ingest:
+        condition: service_healthy
+      worker-procesamiento:
+        condition: service_healthy
+
+  worker-ingest:
+    image: ghcr.io/yagogomez83/forensic-video/worker-ingest:sha-169d944ea2c6@sha256:89cef2cef0cb054e13de5216787e6b24eb84ba483215660891730f636dd4970b
+    networks: [interna]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck: &salud
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/salud')"]
+      interval: 10s
+      retries: 6
+
+  worker-procesamiento:
+    image: ghcr.io/yagogomez83/forensic-video/worker-procesamiento:sha-169d944ea2c6@sha256:35e1ede77919d5f10b7f524cb16559ca9a4e148891b1e75a231ebf248b580304
+    networks: [interna]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck: *salud
+
+networks:
+  interna:
+    internal: true
+  laboratorio:
+
+secrets:
+  clave-sellado:
+    file: ${CLAVE_SELLADO_ARCHIVO:?Definí CLAVE_SELLADO_ARCHIVO en .env}
+  tls-servidor.crt:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/servidor.crt
+  tls-servidor.key:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/servidor.key
+  tls-ca.crt:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/ca.crt
