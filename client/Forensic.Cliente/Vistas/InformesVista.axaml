@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Forensic.Cliente.Nucleo.Informes"
+             xmlns:api="using:Forensic.Cliente.Api"
+             x:Class="Forensic.Cliente.Vistas.InformesVista"
+             x:DataType="vm:InformesViewModel">
+  <UserControl.Resources>
+    <!-- Un informe emitido: lo que asentó el servidor, tal cual. -->
+    <DataTemplate x:Key="Informe" x:DataType="api:InformeEmitidoDto">
+      <StackPanel Spacing="2" Margin="0,4">
+        <TextBlock FontWeight="SemiBold">
+          <Run Text="{Binding Secuencia, Mode=OneWay, StringFormat='Asiento {0}'}" />
+          <Run Text="{Binding Hasta, Mode=OneWay, StringFormat=' · cubre la cadena hasta el asiento {0}'}" />
+        </TextBlock>
+        <TextBlock Opacity="0.8">
+          <Run Text="{Binding EmitidoPor, Mode=OneWay, StringFormat='Emitido por {0}'}" />
+          <Run Text="{Binding EmitidoEn, Mode=OneWay, StringFormat=' el {0:yyyy-MM-dd HH:mm:ss zzz}'}" />
+        </TextBlock>
+        <TextBlock Opacity="0.8">
+          <Run Text="{Binding Evidencias, Mode=OneWay, StringFormat='Evidencias: {0}'}" />
+          <Run Text="{Binding EvidenciasExcluidas, Mode=OneWay, StringFormat=' · excluidas: {0}'}" />
+          <Run Text="{Binding AsientosOpacos, Mode=OneWay, StringFormat=' · asientos opacos: {0}'}" />
+        </TextBlock>
+        <TextBlock Text="{Binding Pdf.Sha256, StringFormat='PDF    SHA-256 {0}'}" FontFamily="Consolas,Menlo,monospace" FontSize="11" Opacity="0.7" />
+        <TextBlock Text="{Binding Bundle.Sha256, StringFormat='Bundle SHA-256 {0}'}" FontFamily="Consolas,Menlo,monospace" FontSize="11" Opacity="0.7" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+          <Button Content="Guardar PDF…" Click="GuardarPdf" />
+          <Button Content="Guardar bundle…" Click="GuardarBundle" />
+        </StackPanel>
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Top" Spacing="6">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="← Caso" Command="{Binding VolverCommand}" />
+        <TextBlock Text="{Binding Caso.NumeroExpediente, StringFormat='Informes de {0}'}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding Caso.Estado}" VerticalAlignment="Center" Opacity="0.7" />
+      </StackPanel>
+      <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                 Text="Cada informe lo arma y lo asienta el servidor. El bundle se verifica fuera del sistema con el verificador independiente, contra la huella publicada de la clave del laboratorio (docs/verificador.md)." />
+      <ProgressBar IsIndeterminate="True" Width="200" HorizontalAlignment="Left" IsVisible="{Binding Emitiendo}" />
+      <TextBlock Classes="aviso" Text="{Binding Aviso}" IsVisible="{Binding Aviso, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Classes="error" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="*,16,*" Margin="0,12,0,0">
+      <DockPanel x:Name="BloquePericial">
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,6">
+          <TextBlock Text="Informe pericial" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                     Text="Sólo lo admisible en juicio. Lo que es «sólo investigación» queda excluido, y los asientos que no corresponden van opacos." />
+          <Button x:Name="EmitirPericial" Content="Emitir informe pericial…"
+                  Command="{Binding PrepararEmisionCommand}" CommandParameter="{x:Static api:TipoDeInforme.Pericial}"
+                  IsEnabled="{Binding !Emitiendo}" />
+          <Border x:Name="ConfirmacionPericial" IsVisible="{Binding ConfirmandoPericial}"
+                  BorderBrush="#8D6E00" BorderThickness="2" Padding="10,6">
+            <StackPanel Spacing="6">
+              <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                         Text="Emitir es irreversible: el servidor sella la cabeza de la cadena y agrega un asiento de emisión con el actor, la hora del servidor y los hashes del PDF y del bundle. Exige la cadena íntegra y coincidente con sus sellos." />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Confirmar emisión" Command="{Binding ConfirmarEmisionCommand}" />
+                <Button Content="Cancelar" Command="{Binding CancelarEmisionCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <ListBox x:Name="Periciales" ItemsSource="{Binding Periciales}" ItemTemplate="{StaticResource Informe}" />
+      </DockPanel>
+
+      <DockPanel x:Name="BloqueInvestigativo" Grid.Column="2">
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,6">
+          <TextBlock Text="Informe investigativo" FontSize="18" FontWeight="SemiBold" />
+          <Border Classes="soloInvestigacion">
+            <TextBlock x:Name="FranjaSoloInvestigacion" FontWeight="SemiBold" TextWrapping="Wrap"
+                       Text="SÓLO INVESTIGACIÓN — NO ES PRUEBA: incluye lo producido por IA y no puede presentarse como admisible. La franja va también en cada página del PDF." />
+          </Border>
+          <Button x:Name="EmitirInvestigativo" Content="Emitir informe investigativo…"
+                  Command="{Binding PrepararEmisionCommand}" CommandParameter="{x:Static api:TipoDeInforme.Investigativo}"
+                  IsEnabled="{Binding !Emitiendo}" />
+          <Border x:Name="ConfirmacionInvestigativa" IsVisible="{Binding ConfirmandoInvestigativo}"
+                  BorderBrush="#8D6E00" BorderThickness="2" Padding="10,6">
+            <StackPanel Spacing="6">
+              <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                         Text="Emitir es irreversible: el servidor sella la cabeza de la cadena y agrega un asiento de emisión. El informe trae todo el caso, con los análisis de IA, y es «sólo investigación» entero." />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Confirmar emisión" Command="{Binding ConfirmarEmisionCommand}" />
+                <Button Content="Cancelar" Command="{Binding CancelarEmisionCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <ListBox x:Name="Investigativos" ItemsSource="{Binding Investigativos}" ItemTemplate="{StaticResource Informe}" />
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</UserControl>

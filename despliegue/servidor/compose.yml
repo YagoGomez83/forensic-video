@@ -43,11 +43,14 @@ services:
       Tls__CertificadoServidor: /run/secrets/tls-servidor.crt
       Tls__ClaveServidor: /run/secrets/tls-servidor.key
       Tls__CaDeClientes: /run/secrets/tls-ca.crt
+      # Revocar = copiar la ca.crl nueva con cp sobre la de TLS_DIR (no mv: el contenedor ve el mismo archivo).
+      Tls__CrlDeClientes: /run/secrets/tls-ca.crl
     secrets:
       - clave-sellado
       - tls-servidor.crt
       - tls-servidor.key
       - tls-ca.crt
+      - tls-ca.crl
     ports:
       # Las workstations del laboratorio entran acá; sin un certificado de la CA no pasan del handshake.
       - "${IP_SERVIDOR:?Definí IP_SERVIDOR en .env}:${PUERTO_SERVIDOR:-8443}:8443"
@@ -107,3 +110,5 @@ secrets:
     file: ${TLS_DIR:?Definí TLS_DIR en .env}/servidor.key
   tls-ca.crt:
     file: ${TLS_DIR:?Definí TLS_DIR en .env}/ca.crt
+  tls-ca.crl:
+    file: ${TLS_DIR:?Definí TLS_DIR en .env}/ca.crl

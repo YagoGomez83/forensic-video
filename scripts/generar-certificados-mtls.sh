@@ -5,6 +5,8 @@
 #
 # Deja en la carpeta:
 #   ca.crt / ca.key                CA del laboratorio. ca.key firma todo: guardala offline, nunca en el servidor.
+#   ca.crl                         la CRL de la CA, para Tls:CrlDeClientes (scripts/revocar-certificado-mtls.sh la
+#                                  re-emite y revoca workstations; index.txt, crlnumber y ca.cnf son su base).
 #   servidor.crt / servidor.key    para Tls:CertificadoServidor / Tls:ClaveServidor (Docker secrets).
 #   <workstation>.crt / .key / .pfx  uno por workstation; el .pfx es para importarlo en el almacén de Windows.
 #
@@ -13,7 +15,7 @@
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
 destino=$1
@@ -79,3 +81,6 @@ for ws in "${workstations[@]}"; do
     huella=$(openssl x509 -in "$ws.crt" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')
     echo "Workstation $ws: $ws.pfx; huella para FORENSIC_CERTIFICADO_CLIENTE: $huella"
 done
+
+# La CRL que exige el servidor: vacía con una CA nueva; con una existente, la re-emite con lo ya revocado.
+"$repo/scripts/revocar-certificado-mtls.sh" "$destino"

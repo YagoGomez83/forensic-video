@@ -116,6 +116,49 @@ public class ContratoDelClienteDeEscritorioTests(ServidorForense servidor) : ICl
     }
 
     [Fact]
+    public async Task Los_informes_se_emiten_listan_y_descargan_con_el_cliente_tipado()
+    {
+        var ct = CancellationToken.None;
+        var cliente = await AnalistaAsync($"inf-{Guid.NewGuid():N}"[..16]);
+        var caso = await cliente.AbrirCasoAsync($"EXP-{Guid.NewGuid():N}"[..20], "Informes desde el escritorio", ct);
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(4096);
+        await cliente.IngestarAsync(caso.Id, "cámara 1.bin", new MemoryStream(bytes), bytes.Length, null, ct);
+
+        var pericial = await cliente.EmitirInformeAsync(caso.Id, TipoDeInforme.Pericial, ct);
+        var investigativo = await cliente.EmitirInformeAsync(caso.Id, TipoDeInforme.Investigativo, ct);
+
+        Assert.Equal((TipoDeInforme.Pericial, 1), (pericial.Tipo, pericial.Evidencias));
+        Assert.Equal(pericial.Secuencia - 1, pericial.Hasta);
+        Assert.Equal(TipoDeInforme.Investigativo, investigativo.Tipo);
+        Assert.Equal(
+            [(TipoDeInforme.Pericial, pericial.Secuencia), (TipoDeInforme.Investigativo, investigativo.Secuencia)],
+            (await cliente.ListarInformesAsync(caso.Id, ct)).Select(i => (i.Tipo, i.Secuencia)).OrderBy(i => i.Secuencia));
+
+        foreach (var informe in new[] { pericial, investigativo })
+        foreach (var (archivo, esperado, firma) in new[]
+                 { (ArchivoDeInforme.Pdf, informe.Pdf, "%PDF"u8.ToArray()), (ArchivoDeInforme.Bundle, informe.Bundle, "PK"u8.ToArray()) })
+        {
+            var destino = new MemoryStream();
+            await cliente.DescargarInformeAAsync(caso.Id, informe.Tipo, informe.Secuencia, archivo,
+                () => Task.FromResult<Stream>(new NoCierra(destino)), ct);
+            var descargado = destino.ToArray();
+            Assert.Equal(firma, descargado[..firma.Length]);
+            Assert.Equal((esperado.Sha256, esperado.TamanoBytes), (HashSha256.Calcular(descargado).Hex, (long)descargado.Length));
+        }
+        Assert.Equal(
+            ["InformePericialEmitido", "InformeInvestigativoEmitido"],
+            (await cliente.ExportarCustodiaAsync(caso.Id, ct)).Asientos.Select(a => a.Tipo).Where(t => t.StartsWith("Informe", StringComparison.Ordinal)));
+    }
+
+    /// <summary>El cliente cierra el destino al terminar; el test lo lee después.</summary>
+    private sealed class NoCierra(MemoryStream interno) : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count) => interno.Write(buffer, offset, count);
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default) => interno.WriteAsync(buffer, ct);
+    }
+
+    [Fact]
     public async Task Un_reporte_de_ia_reenviado_por_el_cliente_vuelve_tipado_y_marcado_solo_investigacion()
     {
         var ct = CancellationToken.None;

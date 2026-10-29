@@ -1,4 +1,5 @@
 using System.Net;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -53,6 +54,22 @@ internal sealed class CertificadosDePrueba
         using var emitido = req.Create(Ca, desde, hasta, RandomNumberGenerator.GetBytes(16));
         return Persistible(emitido.CopyWithPrivateKey(clave));
     }
+
+    /// <summary>
+    /// Una CRL firmada por esta CA, en DER, con los certificados revocados que se le pasen. La genera el
+    /// CertificateRevocationListBuilder de .NET; el servidor la lee con su propio parser.
+    /// </summary>
+    public byte[] Crl(IEnumerable<X509Certificate2>? revocados = null, DateTimeOffset? proxima = null, DateTimeOffset? emitida = null)
+    {
+        var crl = new CertificateRevocationListBuilder();
+        foreach (var revocado in revocados ?? [])
+            crl.AddEntry(revocado, DateTimeOffset.UtcNow.AddMinutes(-5));
+        var hasta = proxima ?? DateTimeOffset.UtcNow.AddDays(365);
+        var desde = emitida ?? (hasta < DateTimeOffset.UtcNow ? hasta.AddDays(-30) : DateTimeOffset.UtcNow.AddMinutes(-5));
+        return crl.Build(Ca, BigInteger.One, hasta, HashAlgorithmName.SHA256, thisUpdate: desde);
+    }
+
+    public static string CrlEnPem(byte[] der) => new(PemEncoding.Write("X509 CRL", der));
 
     /// <summary>
     /// En Windows, SslStream no usa claves efímeras: el certificado se re-importa desde un PKCS#12 para que
