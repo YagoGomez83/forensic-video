@@ -20,7 +20,7 @@ El verificador nunca confía en la clave que trae el propio bundle. Sólo la usa
 
 ## 2. Obtener el ejecutable
 
-Elija el de su sistema entre los binarios publicados, junto con el archivo `SHA256SUMS`:
+Los binarios se publican en los releases `verificador-v*` del repositorio (https://github.com/YagoGomez83/forensic-video/releases). Elija el de su sistema, junto con `SHA256SUMS` y `SHA256SUMS.sigstore.json`:
 
 | Sistema | Archivo |
 |---|---|
@@ -36,13 +36,15 @@ Antes de usarlo, compruebe que el ejecutable sea el publicado:
 
 El resultado tiene que coincidir con la línea correspondiente de `SHA256SUMS`.
 
-`SHA256SUMS` viene firmado sin claves (Sigstore) por el CI del repositorio, en `SHA256SUMS.sigstore.json`. Con [cosign](https://docs.sigstore.dev) se comprueba que lo produjo ese CI, desde la rama principal:
+`SHA256SUMS` viene firmado sin claves (Sigstore) por el workflow de release del repositorio, en `SHA256SUMS.sigstore.json`. Con [cosign](https://docs.sigstore.dev) se comprueba que lo produjo ese workflow para ese release (reemplace `verificador-v1.0.0` por el nombre del release que descargó):
 
 ```
 cosign verify-blob --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity https://github.com/YagoGomez83/forensic-video/.github/workflows/ci.yml@refs/heads/main \
+  --certificate-identity https://github.com/YagoGomez83/forensic-video/.github/workflows/release-verificador.yml@refs/tags/verificador-v1.0.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 ```
+
+El workflow sólo publica un release si el commit del tag ya está en la rama principal, y antes corre los mismos tests que el CI.
 
 Si prefiere no confiar en el binario, compílelo usted desde el código fuente (sección 6).
 
@@ -116,4 +118,4 @@ go test ./...
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o verificador .
 ```
 
-Para comparar su compilación con un binario publicado, use la misma versión de Go y las mismas opciones que el CI (`.github/workflows/ci.yml`, job `verificador`), incluida `-X main.version=<los 12 primeros caracteres del commit>`. Las compilaciones de Go con `-trimpath` son reproducibles: el binario tiene que salir idéntico byte a byte.
+Para comparar su compilación con un binario publicado, use la versión de Go que figura en las notas del release y las mismas opciones que el workflow (`.github/workflows/release-verificador.yml`), incluida `-X main.version=<versión>-<los 12 primeros caracteres del commit>` (lo que imprime `--version` del binario publicado, por ejemplo `v1.0.0-982046d06294`). Las compilaciones de Go con `-trimpath` son reproducibles: el binario tiene que salir idéntico byte a byte.

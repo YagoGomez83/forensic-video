@@ -1,0 +1,76 @@
+name: Release del verificador
+
+# Lo que se le entrega a un perito de contraparte: al pushear un tag verificador-v* (sobre un commit de
+# main), compila los binarios estáticos, firma SHA256SUMS sin claves y los publica en un release.
+#   git tag -a verificador-v1.0.0 -m "…" <commit de main> && git push origin verificador-v1.0.0
+# La identidad de la firma es este workflow en ese tag (docs/verificador.md, sección 2).
+on:
+  push:
+    tags: ["verificador-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Binarios, SHA256SUMS firmado y release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # crear el release
+      id-token: write # firma sin claves con cosign
+    defaults:
+      run:
+        working-directory: tools/verificador
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      # Sólo se publica lo que ya pasó por main: un tag sobre una rama cualquiera no sale.
+      - name: El tag apunta a un commit de main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: tools/verificador/go.mod
+          cache: false
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      # Mismas opciones que el job verificador de ci.yml; la versión es el tag más el commit.
+      - name: Binarios
+        run: |
+          version="${GITHUB_REF_NAME#verificador-}-${GITHUB_SHA::12}"
+          for p in windows/amd64 linux/amd64 linux/arm64 darwin/arm64; do
+            os=${p%/*}; arq=${p#*/}; ext=""; [ "$os" = windows ] && ext=.exe
+            GOOS=$os GOARCH=$arq CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$version" \
+              -o "dist/verificador-$os-$arq$ext" .
+          done
+          cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Firmar SHA256SUMS
+        working-directory: tools/verificador/dist
+        run: |
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          # Lo mismo que corre el perito (docs/verificador.md).
+          cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-verificador.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+      - name: Release
+        working-directory: tools/verificador/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Verificador independiente de bundles \`forensic-video/bundle/v1\`, commit \`${GITHUB_SHA::12}\`."
+            echo
+            echo "Compilado con \`$(go version)\` y \`-trimpath\`: una compilación propia con la misma versión de Go sale idéntica byte a byte."
+            echo "Cómo comprobar el binario y la firma de \`SHA256SUMS\`: \`docs/verificador.md\`, sección 2."
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } > notas.md
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$GITHUB_REF_NAME" --notes-file notas.md \
+            verificador-* SHA256SUMS SHA256SUMS.sigstore.json
