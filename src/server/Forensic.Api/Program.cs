@@ -16,10 +16,11 @@ var builder = WebApplication.CreateBuilder(args);
 var tls = builder.Configuration.GetSection(OpcionesTls.Seccion).Get<OpcionesTls>() ?? new OpcionesTls();
 if (tls.Configurado)
     builder.WebHost.ConfigureKestrel(k => Mtls.ConfigurarKestrel(
-        k, tls, k.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Mtls).FullName!)));
+        k, tls, k.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Mtls).FullName!),
+        k.ApplicationServices.GetRequiredService<TimeProvider>()));
 else if (builder.Environment.IsProduction() && !tls.SinTls)
     throw new InvalidOperationException(
-        "En Production el servidor exige mTLS: definí Tls:CertificadoServidor, Tls:ClaveServidor y Tls:CaDeClientes " +
+        "En Production el servidor exige mTLS: definí Tls:CertificadoServidor, Tls:ClaveServidor, Tls:CaDeClientes y Tls:CrlDeClientes " +
         "(ver scripts/generar-certificados-mtls.sh), o Tls:SinTls=true si un proxy termina el mTLS.");
 
 builder.Services.AddAplicacion();
