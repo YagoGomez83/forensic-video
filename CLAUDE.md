@@ -51,6 +51,10 @@ openssl genpkey -algorithm ed25519 -out <fuera del repo>/clave-sellado.pem
 scripts/generar-certificados-mtls.sh <carpeta fuera del repo> <host del servidor> workstation-01 [...]
 scripts/verificar-imagenes.sh ghcr.io/<owner>/<repo>/servidor@sha256:...   # firma cosign + SBOM, antes de desplegar
 
+# Producción: imágenes firmadas de main, por digest (despliegue/servidor y despliegue/workstation, cada uno con su compose)
+scripts/actualizar-digests-produccion.sh <id del run de ci.yml en main>     # verifica las cuatro y reescribe los compose
+cp despliegue/servidor/.env.example despliegue/servidor/.env && docker compose -f despliegue/servidor/compose.yml up -d
+
 # Cliente de escritorio (solución propia; los tests corren headless, sin pantalla)
 dotnet test client/Forensic.Cliente.sln
 FORENSIC_SERVIDOR=http://localhost:5065/ dotnet run --project client/Forensic.Cliente   # en claro, sólo loopback
