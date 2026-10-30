@@ -1,0 +1,72 @@
+name: Release del cliente de escritorio
+
+# Lo que se instala en las workstations: al pushear un tag cliente-v* (sobre un commit de main), corre los
+# tests del cliente, arma el zip autocontenido para Windows, firma SHA256SUMS sin claves y lo publica en un
+# release junto con el instalador y la configuración de ejemplo.
+#   git tag -a cliente-v1.0.0 -m "…" <commit de main> && git push origin cliente-v1.0.0
+# La identidad de la firma es este workflow en ese tag (docs/cliente-instalacion.md).
+on:
+  push:
+    tags: ["cliente-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Zip win-x64, SHA256SUMS firmado y release
+    runs-on: windows-latest
+    permissions:
+      contents: write # crear el release
+      id-token: write # firma sin claves con cosign
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # Sólo se publica lo que ya pasó por main: un tag sobre una rama cualquiera no sale.
+      - name: El tag apunta a un commit de main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - run: dotnet test client/Forensic.Cliente.sln -c Release
+      # El mismo script que el job cliente-empaquetado de ci.yml; la versión es el tag más el commit.
+      - name: Zip
+        shell: pwsh
+        run: scripts/empaquetar-cliente.ps1 -Version $env:GITHUB_REF_NAME.Substring('cliente-'.Length) -Salida dist
+      - name: Instalador y configuración de ejemplo
+        run: |
+          cp scripts/instalar-cliente.ps1 despliegue/workstation/cliente.json.example dist/
+          cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Firmar SHA256SUMS
+        working-directory: dist
+        run: |
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          # Lo mismo que hace instalar-cliente.ps1 si encuentra cosign (docs/cliente-instalacion.md).
+          cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-cliente.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+      - name: Release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Cliente de escritorio para las workstations (Windows x64, con el runtime de .NET incluido), commit \`${GITHUB_SHA::12}\`."
+            echo
+            echo "Se instala con \`instalar-cliente.ps1\`, que comprueba el zip contra \`SHA256SUMS\` (y su firma, si hay cosign). Cómo: \`docs/cliente-instalacion.md\`."
+            echo "El ejecutable no tiene firma Authenticode: Windows SmartScreen puede avisar «editor desconocido»."
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } > notas.md
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$GITHUB_REF_NAME" --notes-file notas.md \
+            forensic-cliente-win-x64.zip instalar-cliente.ps1 cliente.json.example SHA256SUMS SHA256SUMS.sigstore.json
