@@ -12,18 +12,6 @@ namespace Forensic.Cliente.Api;
 /// </summary>
 public static class CanalSeguro
 {
-    /// <summary>Ruta a la CA del laboratorio en PEM.</summary>
-    public const string VariableDeLaCa = "FORENSIC_CA_SERVIDOR";
-
-    /// <summary>
-    /// El certificado de esta workstation: su huella (SHA-1, 40 hex) en el almacén personal del usuario
-    /// (recomendado en Windows: la clave no sale del almacén), o la ruta a un certificado PEM.
-    /// </summary>
-    public const string VariableDelCertificado = "FORENSIC_CERTIFICADO_CLIENTE";
-
-    /// <summary>Si el certificado es una ruta PEM, la ruta a su clave privada PEM.</summary>
-    public const string VariableDeLaClave = "FORENSIC_CLAVE_CLIENTE";
-
     private static readonly Oid ServidorTls = new("1.3.6.1.5.5.7.3.1");
 
     public static SocketsHttpHandler CrearManejador(X509Certificate2? certificadoCliente, X509Certificate2 caDelServidor)
@@ -50,26 +38,37 @@ public static class CanalSeguro
     }
 
     /// <summary>
-    /// El manejador según la configuración de la workstation: null (el de siempre) para loopback en
-    /// claro, o el de TLS mutuo para https, que exige la CA y el certificado de cliente.
+    /// El manejador según la configuración de la workstation (ya validada por
+    /// <see cref="ConfiguracionDeWorkstation"/>): null (el de siempre) para loopback en claro, o el de TLS
+    /// mutuo para https, con la CA del laboratorio y el certificado de esta workstation.
     /// </summary>
-    public static HttpMessageHandler? DesdeEntorno(Uri servidor, Func<string, string?> variable)
+    public static HttpMessageHandler? Para(ConfiguracionDeWorkstation config)
     {
-        ExigirCanalSeguro(servidor);
-        if (servidor.Scheme == Uri.UriSchemeHttp)
+        ExigirCanalSeguro(config.Servidor);
+        if (config.Servidor.Scheme == Uri.UriSchemeHttp)
             return null;
 
-        var rutaCa = variable(VariableDeLaCa)
-            ?? throw new InvalidOperationException($"Con https hace falta la CA del laboratorio: definí {VariableDeLaCa}.");
-        var certificado = variable(VariableDelCertificado)
-            ?? throw new InvalidOperationException($"Con https hace falta el certificado de esta workstation: definí {VariableDelCertificado}.");
-        var ca = X509Certificate2.CreateFromPem(File.ReadAllText(rutaCa));
-        return CrearManejador(CargarCertificado(certificado, variable(VariableDeLaClave)), ca);
+        var ca = Cargar("la CA del laboratorio", config.CaServidor!, () => X509Certificate2.CreateFromPem(File.ReadAllText(config.CaServidor!)));
+        return CrearManejador(CargarCertificado(config), ca);
     }
 
-    private static X509Certificate2 CargarCertificado(string valor, string? rutaClave)
+    /// <summary>Un archivo de la configuración que no se puede leer: el mensaje dice cuál, para quien instala.</summary>
+    private static X509Certificate2 Cargar(string que, string ruta, Func<X509Certificate2> cargar)
     {
-        if (valor.Length == 40 && valor.All(Uri.IsHexDigit))
+        try
+        {
+            return cargar();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
+        {
+            throw new InvalidOperationException($"No se pudo leer {que} en {ruta}: {ex.Message}", ex);
+        }
+    }
+
+    private static X509Certificate2 CargarCertificado(ConfiguracionDeWorkstation config)
+    {
+        var valor = config.CertificadoCliente!;
+        if (config.CertificadoEnAlmacen)
         {
             using var almacen = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             almacen.Open(OpenFlags.ReadOnly);
@@ -78,10 +77,8 @@ public static class CanalSeguro
                 ? encontrados[0]
                 : throw new InvalidOperationException($"No está en el almacén personal un certificado con clave y huella {valor}.");
         }
-        if (rutaClave is null)
-            throw new InvalidOperationException($"Con un certificado PEM hace falta su clave: definí {VariableDeLaClave}.");
         // En Windows, SslStream no usa una clave efímera cargada de PEM: se re-importa desde PKCS#12.
-        using var pem = X509Certificate2.CreateFromPemFile(valor, rutaClave);
+        using var pem = Cargar("el certificado de esta workstation", valor, () => X509Certificate2.CreateFromPemFile(valor, config.ClaveCliente!));
         return new X509Certificate2(pem.Export(X509ContentType.Pkcs12));
     }
 

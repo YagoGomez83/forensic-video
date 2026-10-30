@@ -1,0 +1,6 @@
+{
+  "servidor": "https://custodia.lab:8443/",
+  "caServidor": "C:\\ProgramData\\ForensicVideo\\ca.crt",
+  "certificadoCliente": "huella SHA-1 del certificado de esta workstation (40 hex, la imprime generar-certificados-mtls.sh)",
+  "workerIa": "http://127.0.0.1:8100/"
+}

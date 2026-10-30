@@ -1,0 +1,12 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Forensic.Cliente.Nucleo"
+        x:Class="Forensic.Cliente.Vistas.VentanaDeErrorDeArranque"
+        x:DataType="vm:ErrorDeArranqueViewModel"
+        Title="Forensic Video" Width="640" SizeToContent="Height" WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="24" Spacing="12">
+    <TextBlock Text="El programa no puede arrancar" FontSize="20" FontWeight="SemiBold" />
+    <SelectableTextBlock x:Name="Motivo" Foreground="#C62828" Text="{Binding Motivo}" TextWrapping="Wrap" />
+    <TextBlock x:Name="Indicacion" Text="{Binding Indicacion}" TextWrapping="Wrap" />
+  </StackPanel>
+</Window>
