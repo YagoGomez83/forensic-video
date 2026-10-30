@@ -10,23 +10,16 @@ namespace Forensic.Cliente;
 
 public sealed class App : Application
 {
-    /// <summary>URL del servidor de custodia. No es un secreto: va por variable de entorno.</summary>
-    public const string VariableDelServidor = "FORENSIC_SERVIDOR";
-
-    /// <summary>URL del worker de IA de esta workstation. Sólo se acepta loopback.</summary>
-    public const string VariableDelWorkerIa = "FORENSIC_WORKER_IA";
-
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime escritorio)
         {
-            var servidor = new Uri(Environment.GetEnvironmentVariable(VariableDelServidor) ?? "http://localhost:5065/");
+            var config = ConfiguracionDeWorkstation.Cargar(ConfiguracionDeWorkstation.RutaPorDefecto, Environment.GetEnvironmentVariable);
             // https exige TLS mutuo (CA y certificado de esta workstation); en claro, sólo loopback.
-            var api = ClienteForense.Crear(servidor, new SesionEnMemoria(), CanalSeguro.DesdeEntorno(servidor, Environment.GetEnvironmentVariable));
-            var workerIa = ClienteWorkerIa.Crear(
-                Environment.GetEnvironmentVariable(VariableDelWorkerIa) is { } url ? new Uri(url) : ClienteWorkerIa.PorDefecto);
+            var api = ClienteForense.Crear(config.Servidor, new SesionEnMemoria(), CanalSeguro.Para(config));
+            var workerIa = ClienteWorkerIa.Crear(config.WorkerIa);
             escritorio.MainWindow = new VentanaPrincipal
             {
                 DataContext = new VentanaViewModel(api, accion => Dispatcher.UIThread.Post(accion), workerIa),
