@@ -37,6 +37,17 @@ public class CanalSeguroTests
         Assert.Contains("0000000000000000000000000000000000000000", ex.Message);
     }
 
+    [Fact]
+    public void Una_ca_que_no_se_puede_leer_se_reporta_con_su_ruta()
+    {
+        var ruta = Path.Combine(AppContext.BaseDirectory, "no-existe", "ca.crt");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            CanalSeguro.Para(Config("https://servidor.lab/", ruta, "0000000000000000000000000000000000000000")));
+        Assert.Contains("CA del laboratorio", ex.Message);
+        Assert.Contains(ruta, ex.Message);
+    }
+
     private static string CaDePrueba()
     {
         using var clave = System.Security.Cryptography.ECDsa.Create();

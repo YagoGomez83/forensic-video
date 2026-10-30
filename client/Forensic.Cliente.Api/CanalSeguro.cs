@@ -48,8 +48,21 @@ public static class CanalSeguro
         if (config.Servidor.Scheme == Uri.UriSchemeHttp)
             return null;
 
-        var ca = X509Certificate2.CreateFromPem(File.ReadAllText(config.CaServidor!));
+        var ca = Cargar("la CA del laboratorio", config.CaServidor!, () => X509Certificate2.CreateFromPem(File.ReadAllText(config.CaServidor!)));
         return CrearManejador(CargarCertificado(config), ca);
+    }
+
+    /// <summary>Un archivo de la configuración que no se puede leer: el mensaje dice cuál, para quien instala.</summary>
+    private static X509Certificate2 Cargar(string que, string ruta, Func<X509Certificate2> cargar)
+    {
+        try
+        {
+            return cargar();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
+        {
+            throw new InvalidOperationException($"No se pudo leer {que} en {ruta}: {ex.Message}", ex);
+        }
     }
 
     private static X509Certificate2 CargarCertificado(ConfiguracionDeWorkstation config)
@@ -65,7 +78,7 @@ public static class CanalSeguro
                 : throw new InvalidOperationException($"No está en el almacén personal un certificado con clave y huella {valor}.");
         }
         // En Windows, SslStream no usa una clave efímera cargada de PEM: se re-importa desde PKCS#12.
-        using var pem = X509Certificate2.CreateFromPemFile(valor, config.ClaveCliente!);
+        using var pem = Cargar("el certificado de esta workstation", valor, () => X509Certificate2.CreateFromPemFile(valor, config.ClaveCliente!));
         return new X509Certificate2(pem.Export(X509ContentType.Pkcs12));
     }
 
