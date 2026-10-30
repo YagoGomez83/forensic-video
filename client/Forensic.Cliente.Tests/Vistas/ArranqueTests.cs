@@ -25,6 +25,14 @@ public class ArranqueTests
             new VentanaViewModel(ClienteForense.Crear(new Uri("http://servidor/"), new SesionEnMemoria(), new ServidorFalso())));
 
         Assert.IsType<VentanaPrincipal>(ventana);
+        Assert.Equal($"Forensic Video {App.Version}", ventana.Title);
+    }
+
+    [Fact]
+    public void La_version_dice_el_commit_del_que_salio()
+    {
+        // En desarrollo, «0.0.0-desarrollo+<commit>»; en un release, «v1.2.3-<12 del commit>».
+        Assert.Matches(@"^(v\d+\.\d+\.\d+-[0-9a-f]{12}|0\.0\.0-desarrollo(\+[0-9a-f]{40})?)$", App.Version);
     }
 
     [AvaloniaFact]
@@ -36,6 +44,7 @@ public class ArranqueTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.IsType<VentanaDeErrorDeArranque>(ventana);
+        Assert.Equal($"Forensic Video {App.Version}", ventana.Title);
         var textos = Textos(ventana);
         Assert.Contains("Con https hace falta la CA del laboratorio: definí «caServidor».", textos);
         Assert.Contains(ConfiguracionDeWorkstation.RutaPorDefecto, textos);

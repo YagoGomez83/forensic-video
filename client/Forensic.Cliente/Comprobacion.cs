@@ -26,6 +26,7 @@ internal static class Comprobacion
         HttpMessageHandler? manejador;
         try
         {
+            salida.WriteLine($"Forensic Video {App.Version}");
             config = ConfiguracionDeWorkstation.Cargar(rutaConfiguracion, variable);
             salida.WriteLine($"Configuración: {config.Origen}");
             salida.WriteLine($"Servidor:      {config.Servidor}");

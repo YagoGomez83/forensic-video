@@ -33,6 +33,7 @@ public sealed class ComprobacionTests : IDisposable
 
         Assert.Equal(Comprobacion.Correcta, codigo);
         Assert.Single(servidor.Peticiones);
+        Assert.Contains(App.Version, _salida.ToString());
         Assert.Contains(Archivo, _salida.ToString());
         Assert.Contains("http://localhost:5065/", _salida.ToString());
         Assert.Contains("http://127.0.0.1:8100/", _salida.ToString());

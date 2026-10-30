@@ -1,3 +1,4 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -11,6 +12,13 @@ namespace Forensic.Cliente;
 
 public sealed class App : Application
 {
+    /// <summary>
+    /// Qué versión corre esta workstation: en un release, el tag y el commit («v1.2.3-0123456789ab»); en
+    /// desarrollo, «0.0.0-desarrollo» y el commit que agrega el SDK.
+    /// </summary>
+    public static string Version { get; } =
+        typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
@@ -34,16 +42,19 @@ public sealed class App : Application
     /// </summary>
     internal static Window ArmarVentana(Func<VentanaViewModel> armar)
     {
+        Window ventana;
         try
         {
-            return new VentanaPrincipal { DataContext = armar() };
+            ventana = new VentanaPrincipal { DataContext = armar() };
         }
         catch (Exception ex)
         {
-            return new VentanaDeErrorDeArranque
+            ventana = new VentanaDeErrorDeArranque
             {
                 DataContext = new ErrorDeArranqueViewModel(ex.Message, ConfiguracionDeWorkstation.RutaPorDefecto),
             };
         }
+        ventana.Title = $"Forensic Video {Version}";
+        return ventana;
     }
 }

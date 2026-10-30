@@ -3,6 +3,9 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- La versión se ve en el título y al comprobar la configuración. Un release la reemplaza por «v1.2.3-<commit>»
+         (release-cliente.yml); en desarrollo queda esta, más el commit que agrega el SDK. -->
+    <Version>0.0.0-desarrollo</Version>
   </PropertyGroup>
 
   <ItemGroup>
