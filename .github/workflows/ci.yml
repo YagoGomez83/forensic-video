@@ -50,6 +50,46 @@ jobs:
           dotnet list client/Forensic.Cliente.sln package --vulnerable --include-transitive | tee vulnerables.txt
           if grep -q "has the following vulnerable packages" vulnerables.txt; then exit 1; fi
 
+  cliente-empaquetado:
+    name: Cliente de escritorio (empaquetado win-x64 + prueba de humo)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # El mismo script que release-cliente.yml.
+      - run: scripts/empaquetar-cliente.ps1 -Version v0.0.0 -Salida artefactos
+        shell: pwsh
+      # El ejecutable publicado, descomprimido como en una workstation, con su configuración en
+      # ProgramData. Una salida capturada hace que PowerShell espere a una aplicación de ventana.
+      - name: Prueba de humo de --comprobar
+        shell: pwsh
+        run: |
+          Expand-Archive artefactos/forensic-cliente-win-x64.zip cliente
+          $config = New-Item -ItemType Directory -Force "$env:ProgramData\ForensicVideo"
+          function Comprobar([string]$json, [int]$esperado) {
+            Set-Content "$config\cliente.json" $json
+            $salida = & .\cliente\Forensic.Cliente.exe --comprobar | Out-String
+            $codigo = $LASTEXITCODE
+            Write-Output $salida
+            if ($salida -notmatch 'Forensic Video v0\.0\.0-[0-9a-f]{12}') { throw 'No informa la versión.' }
+            if ($codigo -ne $esperado) { throw "Salió con $codigo; se esperaba $esperado." }
+          }
+          # Una variable de entorno no pisa el archivo.
+          $env:FORENSIC_SERVIDOR = 'http://127.0.0.1:5065/'
+          Comprobar '{ "servidor": "http://custodia.lab/" }' 1
+          Comprobar '{ "servidor": "http://127.0.0.1:5065/", "workerIa": "http://gpu.lab:8100/" }' 1
+          Comprobar '{ "servidor": "http://127.0.0.1:5065/" }' 2
+          $http = Start-Process python -ArgumentList '-m', 'http.server', '5065', '--bind', '127.0.0.1' -PassThru
+          Start-Sleep 3
+          try { Comprobar '{ "servidor": "http://127.0.0.1:5065/" }' 0 } finally { Stop-Process -Id $http.Id }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: forensic-cliente-win-x64
+          path: artefactos/forensic-cliente-win-x64.zip
+          retention-days: 7
+
   worker-ingest:
     name: Worker de ingesta (lint + test)
     runs-on: ubuntu-latest
