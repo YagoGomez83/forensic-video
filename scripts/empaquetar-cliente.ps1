@@ -1,4 +1,4 @@
-# Arma el cliente de escritorio para las workstations: la carpeta publicada (con el runtime de .NET
+﻿# Arma el cliente de escritorio para las workstations: la carpeta publicada (con el runtime de .NET
 # incluido, ver client/Forensic.Cliente/Properties/PublishProfiles/win-x64.pubxml) en un zip.
 # Lo usan el CI (prueba de humo) y release-cliente.yml; se corre desde un clon de git, en Windows.
 #

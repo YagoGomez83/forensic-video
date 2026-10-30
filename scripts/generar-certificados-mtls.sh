@@ -79,7 +79,7 @@ for ws in "${workstations[@]}"; do
         openssl pkcs12 -export -in "$ws.crt" -inkey "$ws.key" -name "$ws" -out "$ws.pfx"
     fi
     huella=$(openssl x509 -in "$ws.crt" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')
-    echo "Workstation $ws: $ws.pfx; huella para FORENSIC_CERTIFICADO_CLIENTE: $huella"
+    echo "Workstation $ws: $ws.pfx; huella para «certificadoCliente» en cliente.json (o FORENSIC_CERTIFICADO_CLIENTE): $huella"
 done
 
 # La CRL que exige el servidor: vacía con una CA nueva; con una existente, la re-emite con lo ya revocado.

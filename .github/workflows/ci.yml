@@ -51,7 +51,7 @@ jobs:
           if grep -q "has the following vulnerable packages" vulnerables.txt; then exit 1; fi
 
   cliente-empaquetado:
-    name: Cliente de escritorio (empaquetado win-x64 + prueba de humo)
+    name: Cliente de escritorio (empaquetado win-x64, instalador y prueba de humo)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,21 +61,49 @@ jobs:
       # El mismo script que release-cliente.yml.
       - run: scripts/empaquetar-cliente.ps1 -Version v0.0.0 -Salida artefactos
         shell: pwsh
-      # El ejecutable publicado, descomprimido como en una workstation, con su configuración en
-      # ProgramData. Una salida capturada hace que PowerShell espere a una aplicación de ventana.
+      # Lo que publica release-cliente.yml, salvo la firma: el instalador corre sin cosign.
+      - name: Release de prueba
+        shell: bash
+        run: |
+          cp scripts/instalar-cliente.ps1 despliegue/workstation/cliente.json.example artefactos/
+          cd artefactos && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # El runner es administrador: instala de verdad, en Program Files y ProgramData.
+      - name: Instalador
+        shell: pwsh
+        run: |
+          # Un zip alterado no se instala.
+          Copy-Item -Recurse artefactos alterado
+          Add-Content -AsByteStream alterado/forensic-cliente-win-x64.zip ([byte[]](0))
+          try { ./alterado/instalar-cliente.ps1; throw 'Instaló un zip alterado.' }
+          catch { if ($_.Exception.Message -notmatch 'no es el del release') { throw } ; Write-Output "[OK] $($_.Exception.Message)" }
+
+          ./artefactos/instalar-cliente.ps1
+          $exe = Get-Item "$env:ProgramFiles\ForensicVideo\Cliente\v0.0.0-*\Forensic.Cliente.exe"
+          if (-not (Test-Path "$([Environment]::GetFolderPath('CommonPrograms'))\Forensic Video.lnk")) { throw 'Falta el acceso directo.' }
+          # Los usuarios leen la configuración, no la escriben.
+          $usuarios = (Get-Acl "$env:ProgramData\ForensicVideo").Access |
+            Where-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-32-545' }
+          if (@($usuarios).Count -ne 1 -or $usuarios.FileSystemRights -match 'Write|Modify|FullControl') { throw "Usuarios: $($usuarios.FileSystemRights)" }
+          # Instalar la misma versión dos veces no pisa la instalada.
+          try { ./artefactos/instalar-cliente.ps1; throw 'Reinstaló encima.' }
+          catch { if ($_.Exception.Message -notmatch 'ya está instalada') { throw } ; Write-Output "[OK] $($_.Exception.Message)" }
+          "exe=$($exe.FullName)" >> $env:GITHUB_ENV
+      # El ejecutable instalado, con su configuración en ProgramData. Una salida capturada hace que
+      # PowerShell espere a una aplicación de ventana.
       - name: Prueba de humo de --comprobar
         shell: pwsh
         run: |
-          Expand-Archive artefactos/forensic-cliente-win-x64.zip cliente
-          $config = New-Item -ItemType Directory -Force "$env:ProgramData\ForensicVideo"
+          $config = "$env:ProgramData\ForensicVideo\cliente.json"
           function Comprobar([string]$json, [int]$esperado) {
-            Set-Content "$config\cliente.json" $json
-            $salida = & .\cliente\Forensic.Cliente.exe --comprobar | Out-String
+            Set-Content $config $json
+            $salida = & $env:exe --comprobar | Out-String
             $codigo = $LASTEXITCODE
             Write-Output $salida
             if ($salida -notmatch 'Forensic Video v0\.0\.0-[0-9a-f]{12}') { throw 'No informa la versión.' }
             if ($codigo -ne $esperado) { throw "Salió con $codigo; se esperaba $esperado." }
           }
+          # El ejemplo que dejó el instalador no pasa: hay que completarlo.
+          Comprobar (Get-Content -Raw $config) 1
           # Una variable de entorno no pisa el archivo.
           $env:FORENSIC_SERVIDOR = 'http://127.0.0.1:5065/'
           Comprobar '{ "servidor": "http://custodia.lab/" }' 1
