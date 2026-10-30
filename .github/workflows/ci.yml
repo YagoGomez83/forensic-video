@@ -111,7 +111,12 @@ jobs:
           Comprobar '{ "servidor": "http://127.0.0.1:5065/", "workerIa": "http://gpu.lab:8100/" }' 1
           Comprobar '{ "servidor": "http://127.0.0.1:5065/" }' 2
           $http = Start-Process python -ArgumentList '-m', 'http.server', '5065', '--bind', '127.0.0.1' -PassThru
-          Start-Sleep 3
+          # Hasta que escuche: un tiempo fijo a veces no alcanza en el runner.
+          $escucha = $false
+          for ($i = 0; $i -lt 60 -and -not $escucha; $i++) {
+            try { (New-Object Net.Sockets.TcpClient('127.0.0.1', 5065)).Close(); $escucha = $true } catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (-not $escucha) { throw 'El servidor HTTP de prueba no arrancó.' }
           try { Comprobar '{ "servidor": "http://127.0.0.1:5065/" }' 0 } finally { Stop-Process -Id $http.Id }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
