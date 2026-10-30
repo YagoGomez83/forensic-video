@@ -123,7 +123,12 @@ public sealed record ConfiguracionDeWorkstation(
                 throw new ConfiguracionInvalidaException(
                     $"Con https hace falta el certificado de esta workstation: definí {nombre("certificadoCliente")}.");
             if (!config.CertificadoEnAlmacen && config.ClaveCliente is null)
-                throw new ConfiguracionInvalidaException($"Con un certificado PEM hace falta su clave: definí {nombre("claveCliente")}.");
+                // Sin clave, lo más probable es que no sea un PEM sino una huella mal copiada (o el ejemplo sin completar).
+                throw new ConfiguracionInvalidaException(File.Exists(config.CertificadoCliente)
+                    ? $"Con un certificado PEM hace falta su clave: definí {nombre("claveCliente")}."
+                    : $"{nombre("certificadoCliente")} tiene que ser la huella SHA-1 del certificado de esta workstation " +
+                      $"(40 caracteres hexadecimales, sin espacios ni dos puntos) o la ruta a un certificado PEM que exista, " +
+                      $"no «{config.CertificadoCliente}».");
         }
         return config;
     }

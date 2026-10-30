@@ -142,9 +142,26 @@ public sealed class ConfiguracionDeWorkstationTests : IDisposable
     [Fact]
     public void Un_certificado_pem_exige_su_clave()
     {
-        var ex = Invalida("""{ "servidor": "https://custodia.lab/", "caServidor": "ca.crt", "certificadoCliente": "c.crt" }""");
+        var pem = Path.Combine(_carpeta, "workstation-01.crt");
+        File.WriteAllText(pem, "");
+
+        var ex = Invalida($$"""{ "servidor": "https://custodia.lab/", "caServidor": "ca.crt", "certificadoCliente": "{{pem.Replace(@"\", @"\\")}}" }""");
 
         Assert.Contains("claveCliente", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("huella SHA-1 del certificado de esta workstation (40 hex, la imprime generar-certificados-mtls.sh)")]
+    [InlineData("01 23 45 67 89 ab cd ef 01 23 45 67 89 ab cd ef 01 23 45 67")]
+    [InlineData("01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67")]
+    public void Lo_que_no_es_huella_ni_archivo_se_rechaza_por_lo_que_es(string valor)
+    {
+        // El ejemplo sin completar, o una huella copiada con separadores: pedir «claveCliente» confundiría.
+        var ex = Invalida($$"""{ "servidor": "https://custodia.lab/", "caServidor": "ca.crt", "certificadoCliente": "{{valor}}" }""");
+
+        Assert.Contains("certificadoCliente", ex.Message);
+        Assert.Contains("40", ex.Message);
+        Assert.DoesNotContain("claveCliente", ex.Message);
     }
 
     [Fact]
