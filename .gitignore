@@ -198,6 +198,8 @@ publish/
 # Note: Comment the next line if you want to checkin your web deploy settings,
 # but database connection strings (with potential passwords) will be unencrypted
 *.pubxml
+# El del cliente de escritorio no lleva credenciales: sólo cómo se arma la carpeta (release-cliente.yml).
+!client/Forensic.Cliente/Properties/PublishProfiles/win-x64.pubxml
 *.publishproj
 
 # Microsoft Azure Web App publish settings. Comment the next line if you want to
