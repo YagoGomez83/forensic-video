@@ -73,7 +73,8 @@ jobs:
         run: |
           # Un zip alterado no se instala.
           Copy-Item -Recurse artefactos alterado
-          Add-Content -AsByteStream alterado/forensic-cliente-win-x64.zip ([byte[]](0))
+          $alterado = [IO.File]::Open((Resolve-Path alterado/forensic-cliente-win-x64.zip), 'Append')
+          $alterado.WriteByte(0); $alterado.Close()
           try { ./alterado/instalar-cliente.ps1; throw 'Instaló un zip alterado.' }
           catch { if ($_.Exception.Message -notmatch 'no es el del release') { throw } ; Write-Output "[OK] $($_.Exception.Message)" }
 
