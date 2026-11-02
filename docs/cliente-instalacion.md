@@ -10,7 +10,7 @@ El cliente de escritorio se publica como release `cliente-v*` del repositorio (h
 
 ## 2. Bajar el release y comprobarlo
 
-Del release, bajar a una misma carpeta: `forensic-cliente-win-x64.zip`, `instalar-cliente.ps1`, `cliente.json.example`, `SHA256SUMS` y `SHA256SUMS.sigstore.json`.
+Del release, bajar a una misma carpeta: `forensic-cliente-win-x64.zip`, `instalar-cliente.ps1`, `instalar-certificado-workstation.ps1`, `cliente.json.example`, `SHA256SUMS` y `SHA256SUMS.sigstore.json`.
 
 `SHA256SUMS` viene firmado sin claves (Sigstore) por el workflow de release del repositorio. Con [cosign](https://docs.sigstore.dev) en el PATH se comprueba que lo produjo ese workflow para ese release (reemplace `cliente-v1.0.0` por el release que bajó):
 
@@ -20,7 +20,7 @@ cosign verify-blob --bundle SHA256SUMS.sigstore.json `
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 ```
 
-Después, que el instalador sea el publicado: `Get-FileHash .\instalar-cliente.ps1` tiene que coincidir con su línea de `SHA256SUMS`. El instalador comprueba el zip por su cuenta.
+Después, que los dos scripts sean los publicados: `Get-FileHash .\instalar-cliente.ps1` y `Get-FileHash .\instalar-certificado-workstation.ps1` tienen que coincidir con sus líneas de `SHA256SUMS`. El instalador comprueba el zip por su cuenta.
 
 Sin cosign, el instalador sólo puede comparar el zip con `SHA256SUMS`, que vino en la misma descarga: eso detecta un archivo dañado, no uno reemplazado junto con `SHA256SUMS`. En ese caso, compare `SHA256SUMS` con el que muestran las notas del release en GitHub.
 
@@ -57,7 +57,7 @@ Copie `ca.crt` a `C:\ProgramData\ForensicVideo\` y complete `cliente.json`:
 |---|---|
 | `servidor` | **Obligatoria.** URL del servidor de custodia. Fuera de esta máquina tiene que ser `https`: el canal es TLS mutuo. |
 | `caServidor` | Con `https`, obligatoria. Ruta a la CA del laboratorio en PEM. El cliente sólo acepta un servidor con un certificado de esta CA y con el nombre de la URL. |
-| `certificadoCliente` | Con `https`, obligatoria. La huella SHA-1 (40 hex) del certificado de esta workstation en el almacén personal del analista, o la ruta a un certificado PEM. |
+| `certificadoCliente` | Con `https`, obligatoria. La huella SHA-1 (40 hex) del certificado de esta workstation en un almacén de Windows (sección 5), o la ruta a un certificado PEM. |
 | `claveCliente` | Sólo con un certificado PEM: la ruta a su clave privada. Con la huella no se usa; es lo recomendado, porque así la clave no sale del almacén de Windows. |
 | `workerIa` | URL del worker de IA de esta workstation. Por defecto `http://127.0.0.1:8100/`. Sólo se acepta loopback. |
 
@@ -65,19 +65,27 @@ Una clave desconocida, por ejemplo mal escrita, es un error, no se ignora. **Si 
 
 ## 5. El certificado de la workstation
 
-Cada analista que use la workstation importa el `.pfx` **con su propio usuario**: doble clic en el archivo, ubicación **Usuario actual**, almacén **Personal**. No marque la clave como exportable.
+El certificado identifica a **la PC**; a la persona la identifica su login en el servidor, que es lo que queda en la cadena de custodia. Por eso va en el almacén de la máquina, una vez por PC, y lo usan todos los usuarios de Windows que se sienten en ella. Bájelo del release (`instalar-certificado-workstation.ps1`) y, en PowerShell **como administrador**:
 
-El cliente lo busca por la huella en el almacén personal del usuario que lo abre. Si un certificado se revoca (`scripts/revocar-certificado-mtls.sh`), el servidor rechaza esa workstation en la siguiente conexión.
+```
+powershell -ExecutionPolicy Bypass -File .\instalar-certificado-workstation.ps1 -Pfx .\workstation-01.pfx
+```
+
+Pide la contraseña del `.pfx`, lo importa en `LocalMachine\My` con la clave privada **no exportable** y le da al grupo Usuarios permiso de sólo lectura sobre esa clave: pueden usarla para el TLS mutuo, no copiarla. Al final imprime la huella, que tiene que coincidir con `certificadoCliente`. Después borre el `.pfx` de la PC.
+
+El cliente busca la huella primero en el almacén personal del usuario que lo abre y, si no está, en el de la máquina. Un certificado importado a mano en el almacén de la máquina, sin el permiso del script, no sirve para los usuarios comunes: `--comprobar` dice que no pueden usar la clave privada. Sigue funcionando importarlo en el almacén personal de cada usuario (doble clic en el `.pfx`, **Usuario actual**, **Personal**, sin marcar la clave como exportable), pero hay que repetirlo por cada usuario de Windows.
+
+Si un certificado se revoca (`scripts/revocar-certificado-mtls.sh`), el servidor rechaza esa workstation en la siguiente conexión.
 
 ## 6. Comprobar
 
-Cada analista, con su usuario:
+Con un usuario común de la PC, no como administrador (un administrador puede leer la clave aunque falte el permiso de la sección 5):
 
 ```
 & 'C:\Program Files\ForensicVideo\Cliente\<versión>\Forensic.Cliente.exe' --comprobar
 ```
 
-Imprime la versión, de dónde salió la configuración, el servidor y el worker de IA, y hace una petición al servidor sin abrir la ventana. Cualquier respuesta del servidor, aunque sea «sin sesión», prueba que el TLS mutuo funciona en los dos sentidos.
+Imprime la versión, de dónde salió la configuración, el servidor, el worker de IA y de qué almacén salió el certificado, y hace una petición al servidor sin abrir la ventana. Cualquier respuesta del servidor, aunque sea «sin sesión», prueba que el TLS mutuo funciona en los dos sentidos.
 
 | Código de salida | Significa |
 |---|---|

@@ -118,6 +118,75 @@ jobs:
           }
           if (-not $escucha) { throw 'El servidor HTTP de prueba no arrancó.' }
           try { Comprobar '{ "servidor": "http://127.0.0.1:5065/" }' 0 } finally { Stop-Process -Id $http.Id }
+      # El certificado de la workstation en el almacén de la máquina, con TLS mutuo de verdad y con un
+      # usuario que no es administrador: sólo puede usar la clave por el permiso que le da el script.
+      - name: Certificados de prueba para el almacén de la máquina
+        shell: bash
+        run: |
+          clave=$(openssl rand -hex 16)
+          echo "::add-mask::$clave"
+          echo "PFX_CLAVE=$clave" >> "$GITHUB_ENV"
+          PFX_CLAVE=$clave scripts/generar-certificados-mtls.sh "$RUNNER_TEMP/ca" 127.0.0.1 workstation-ci
+      - name: Certificado en el almacén de la máquina, con un usuario sin privilegios
+        shell: pwsh
+        run: |
+          $ca = Join-Path $env:RUNNER_TEMP 'ca'
+          $pfx = Join-Path $ca 'workstation-ci.pfx'
+          $clave = ConvertTo-SecureString $env:PFX_CLAVE -AsPlainText -Force
+          Copy-Item (Join-Path $ca 'ca.crt') "$env:ProgramData\ForensicVideo\ca.crt"
+
+          # Un servidor que exige un certificado de cliente de la CA: cualquier respuesta prueba el TLS mutuo.
+          $servidor = Join-Path $env:RUNNER_TEMP 'mtls.py'
+          Set-Content $servidor @'
+          import http.server, ssl, sys
+          ca = sys.argv[1]
+          ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+          ctx.load_cert_chain(f"{ca}/servidor.crt", f"{ca}/servidor.key")
+          ctx.load_verify_locations(f"{ca}/ca.crt")
+          ctx.verify_mode = ssl.CERT_REQUIRED
+          srv = http.server.HTTPServer(("127.0.0.1", 5443), http.server.BaseHTTPRequestHandler)
+          srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+          srv.serve_forever()
+          '@
+          $mtls = Start-Process python -ArgumentList $servidor, $ca -PassThru
+          $escucha = $false
+          for ($i = 0; $i -lt 60 -and -not $escucha; $i++) {
+            try { (New-Object Net.Sockets.TcpClient('127.0.0.1', 5443)).Close(); $escucha = $true } catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (-not $escucha) { throw 'El servidor mTLS de prueba no arrancó.' }
+
+          # Un usuario de Windows común, sin el certificado en su almacén personal.
+          $contrasena = ConvertTo-SecureString "Ci-$([guid]::NewGuid())" -AsPlainText -Force
+          New-LocalUser -Name analista-ci -Password $contrasena -PasswordNeverExpires | Out-Null
+          $credencial = New-Object Management.Automation.PSCredential('analista-ci', $contrasena)
+          $carpeta = 'C:\Users\Public\comprobar'
+          New-Item -ItemType Directory -Force $carpeta | Out-Null
+          function ComoAnalista([int]$esperado, [string]$debeDecir) {
+            $p = Start-Process $env:exe -ArgumentList '--comprobar' -Credential $credencial -LoadUserProfile `
+              -WorkingDirectory $carpeta -RedirectStandardOutput "$carpeta\salida.txt" -Wait -PassThru
+            $salida = Get-Content -Raw "$carpeta\salida.txt"
+            Write-Output $salida
+            if ($p.ExitCode -ne $esperado) { throw "Salió con $($p.ExitCode); se esperaba $esperado." }
+            if ($salida -notmatch $debeDecir) { throw "La salida no dice «$debeDecir»." }
+          }
+
+          try {
+            # Importado a mano, sin el permiso del script: el usuario común no puede usar la clave.
+            $importado = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\LocalMachine\My -Password $clave
+            Set-Content "$env:ProgramData\ForensicVideo\cliente.json" (@{
+                servidor = 'https://127.0.0.1:5443/'
+                caServidor = "$env:ProgramData\ForensicVideo\ca.crt"
+                certificadoCliente = $importado.Thumbprint } | ConvertTo-Json)
+            ComoAnalista 1 'no puede usar la clave privada'
+            Remove-Item "Cert:\LocalMachine\My\$($importado.Thumbprint)"
+
+            # Con el script: entra, y dice que el certificado salió del almacén de la máquina.
+            $salida = ./scripts/instalar-certificado-workstation.ps1 -Pfx $pfx -Clave $clave | Out-String
+            Write-Output $salida
+            if ($salida -notmatch "Huella \(certificadoCliente en cliente\.json\): $($importado.Thumbprint)") { throw 'No imprime la huella.' }
+            ComoAnalista 0 'la m.{1,2}quina\)'
+          }
+          finally { Stop-Process -Id $mtls.Id }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: forensic-cliente-win-x64

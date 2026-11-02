@@ -10,8 +10,8 @@
 # 3. Crea (o actualiza) el acceso directo «Forensic Video» del menú Inicio, para todos los usuarios.
 # 4. Si no existe, crea ProgramData\ForensicVideo\cliente.json desde el ejemplo, escribible sólo por
 #    administradores; si existe, no lo toca.
-# El final lo hace cada analista con su usuario (el certificado de la workstation está en su almacén
-# personal): «Forensic.Cliente.exe --comprobar».
+# Después, el certificado de la PC con instalar-certificado-workstation.ps1 y, con un usuario común,
+# «Forensic.Cliente.exe --comprobar».
 param(
     [string]$Carpeta = $PSScriptRoot,
     [switch]$ExigirFirma
@@ -105,6 +105,6 @@ else {
     Write-Output "Se creó $config desde el ejemplo (sólo los administradores pueden modificarlo)."
     Write-Output "Completalo y copiá ca.crt a $carpetaConfig."
 }
-# --comprobar va con el usuario de cada analista: el certificado de la workstation está en su almacén
-# personal, no en el del administrador.
-Write-Output "Después, cada analista con su usuario: & '$exe' --comprobar"
+# --comprobar va con un usuario común: un administrador puede leer la clave del almacén de la máquina
+# aunque falte el permiso que da instalar-certificado-workstation.ps1.
+Write-Output "Después: instalar-certificado-workstation.ps1 -Pfx <el .pfx de esta PC> y, con un usuario común, & '$exe' --comprobar"
