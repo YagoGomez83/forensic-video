@@ -28,13 +28,14 @@ if (-not $certificado.HasPrivateKey) { throw 'El certificado se importó sin cla
 Write-Output "[OK] $($certificado.Subject) en el almacén de la máquina (clave no exportable)."
 
 # 2. El archivo de la clave privada: CNG (Crypto\Keys) para ECDSA, o el CSP clásico para RSA.
-$clave = [Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($certificado)
-if (-not $clave) { $clave = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificado) }
-if ($clave -is [Security.Cryptography.ECDsaCng] -or $clave -is [Security.Cryptography.RSACng]) {
-    $nombre = $clave.Key.UniqueName
+# (PowerShell no distingue mayúsculas en los nombres: no llamarla $clave, que es la contraseña.)
+$privada = [Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($certificado)
+if (-not $privada) { $privada = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificado) }
+if ($privada -is [Security.Cryptography.ECDsaCng] -or $privada -is [Security.Cryptography.RSACng]) {
+    $nombre = $privada.Key.UniqueName
 }
 else {
-    $nombre = $clave.CspKeyContainerInfo.UniqueKeyContainerName
+    $nombre = $privada.CspKeyContainerInfo.UniqueKeyContainerName
 }
 $archivo = @(
     (Join-Path $env:ProgramData "Microsoft\Crypto\Keys\$nombre"),
