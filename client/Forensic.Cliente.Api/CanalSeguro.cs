@@ -87,6 +87,9 @@ public static class CanalSeguro
 
     private static X509Certificate2Collection Buscar(StoreLocation ubicacion, string huella)
     {
+        // Fuera de Windows (los tests en Linux) .NET no abre LocalMachine\My: no hay almacén de la máquina.
+        if (ubicacion == StoreLocation.LocalMachine && !OperatingSystem.IsWindows())
+            return [];
         using var almacen = new X509Store(StoreName.My, ubicacion);
         almacen.Open(OpenFlags.ReadOnly);
         return almacen.Certificates.Find(X509FindType.FindByThumbprint, huella, validOnly: false);
