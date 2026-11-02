@@ -48,6 +48,69 @@ public class CanalSeguroTests
         Assert.Contains(ruta, ex.Message);
     }
 
+    // El certificado de la workstation se busca por huella primero en el almacén del usuario y después en
+    // el de la máquina: el de la máquina lo comparten todos los usuarios de Windows de la PC (la persona se
+    // identifica con su login en el servidor). Qué encontró cada almacén se prueba sin abrir X509Store.
+
+    [Fact]
+    public void El_certificado_del_almacen_de_la_maquina_sirve_si_no_esta_en_el_del_usuario()
+    {
+        using var certificado = CertificadoConClave();
+
+        var elegido = CanalSeguro.ElegirCertificado(certificado.Thumbprint,
+            [(CanalSeguro.AlmacenDelUsuario, []), (CanalSeguro.AlmacenDeLaMaquina, [certificado])], out var almacen);
+
+        Assert.Same(certificado, elegido);
+        Assert.Equal(CanalSeguro.AlmacenDeLaMaquina, almacen);
+    }
+
+    [Fact]
+    public void Si_esta_en_los_dos_almacenes_gana_el_del_usuario()
+    {
+        using var delUsuario = CertificadoConClave();
+        using var deLaMaquina = CertificadoConClave();
+
+        var elegido = CanalSeguro.ElegirCertificado(delUsuario.Thumbprint,
+            [(CanalSeguro.AlmacenDelUsuario, [delUsuario]), (CanalSeguro.AlmacenDeLaMaquina, [deLaMaquina])], out var almacen);
+
+        Assert.Same(delUsuario, elegido);
+        Assert.Equal(CanalSeguro.AlmacenDelUsuario, almacen);
+    }
+
+    [Fact]
+    public void Si_no_esta_en_ningun_almacen_el_mensaje_nombra_los_dos_y_la_huella()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => CanalSeguro.ElegirCertificado("0123",
+            [(CanalSeguro.AlmacenDelUsuario, []), (CanalSeguro.AlmacenDeLaMaquina, [])], out _));
+
+        Assert.Contains("0123", ex.Message);
+        Assert.Contains(CanalSeguro.AlmacenDelUsuario, ex.Message);
+        Assert.Contains(CanalSeguro.AlmacenDeLaMaquina, ex.Message);
+    }
+
+    [Fact]
+    public void Un_certificado_sin_clave_privada_se_reporta_como_tal_y_no_como_ausente()
+    {
+        // Lo que queda si se importa el .crt en lugar del .pfx.
+        using var conClave = CertificadoConClave();
+        using var sinClave = new System.Security.Cryptography.X509Certificates.X509Certificate2(conClave.RawData);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => CanalSeguro.ElegirCertificado(sinClave.Thumbprint,
+            [(CanalSeguro.AlmacenDelUsuario, []), (CanalSeguro.AlmacenDeLaMaquina, [sinClave])], out _));
+
+        Assert.Contains("clave privada", ex.Message);
+        Assert.Contains(".pfx", ex.Message);
+        Assert.Contains(CanalSeguro.AlmacenDeLaMaquina, ex.Message);
+    }
+
+    private static System.Security.Cryptography.X509Certificates.X509Certificate2 CertificadoConClave()
+    {
+        using var clave = System.Security.Cryptography.ECDsa.Create();
+        var pedido = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=workstation-de-prueba", clave, System.Security.Cryptography.HashAlgorithmName.SHA256);
+        return pedido.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+    }
+
     private static string CaDePrueba()
     {
         using var clave = System.Security.Cryptography.ECDsa.Create();

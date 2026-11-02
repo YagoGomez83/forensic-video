@@ -24,8 +24,8 @@ internal static class Program
         if (OperatingSystem.IsWindows() && !Console.IsOutputRedirected)
             AttachConsole(ProcesoPadre);
         return Comprobacion.EjecutarAsync(
-            ConfiguracionDeWorkstation.RutaPorDefecto, Environment.GetEnvironmentVariable, Console.Out, CanalSeguro.Para,
-            CancellationToken.None).GetAwaiter().GetResult();
+            ConfiguracionDeWorkstation.RutaPorDefecto, Environment.GetEnvironmentVariable, Console.Out,
+            config => CanalSeguro.Para(config, Console.Out.WriteLine), CancellationToken.None).GetAwaiter().GetResult();
     }
 
     private const int ProcesoPadre = -1;

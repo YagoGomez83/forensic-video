@@ -40,16 +40,17 @@ public static class CanalSeguro
     /// <summary>
     /// El manejador según la configuración de la workstation (ya validada por
     /// <see cref="ConfiguracionDeWorkstation"/>): null (el de siempre) para loopback en claro, o el de TLS
-    /// mutuo para https, con la CA del laboratorio y el certificado de esta workstation.
+    /// mutuo para https, con la CA del laboratorio y el certificado de esta workstation. <paramref name="informar"/>
+    /// recibe de dónde salió el certificado (lo imprime <c>--comprobar</c>).
     /// </summary>
-    public static HttpMessageHandler? Para(ConfiguracionDeWorkstation config)
+    public static HttpMessageHandler? Para(ConfiguracionDeWorkstation config, Action<string>? informar = null)
     {
         ExigirCanalSeguro(config.Servidor);
         if (config.Servidor.Scheme == Uri.UriSchemeHttp)
             return null;
 
         var ca = Cargar("la CA del laboratorio", config.CaServidor!, () => X509Certificate2.CreateFromPem(File.ReadAllText(config.CaServidor!)));
-        return CrearManejador(CargarCertificado(config), ca);
+        return CrearManejador(CargarCertificado(config, informar), ca);
     }
 
     /// <summary>Un archivo de la configuración que no se puede leer: el mensaje dice cuál, para quien instala.</summary>
@@ -65,21 +66,77 @@ public static class CanalSeguro
         }
     }
 
-    private static X509Certificate2 CargarCertificado(ConfiguracionDeWorkstation config)
+    private static X509Certificate2 CargarCertificado(ConfiguracionDeWorkstation config, Action<string>? informar)
     {
         var valor = config.CertificadoCliente!;
         if (config.CertificadoEnAlmacen)
         {
-            using var almacen = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-            almacen.Open(OpenFlags.ReadOnly);
-            var encontrados = almacen.Certificates.Find(X509FindType.FindByThumbprint, valor, validOnly: false);
-            return encontrados.Count == 1 && encontrados[0].HasPrivateKey
-                ? encontrados[0]
-                : throw new InvalidOperationException($"No está en el almacén personal un certificado con clave y huella {valor}.");
+            // El de la máquina lo comparten todos los usuarios de Windows de la PC: la persona se identifica
+            // con su login en el servidor, no con su cuenta de Windows.
+            var certificado = ElegirCertificado(valor,
+                [(AlmacenDelUsuario, Buscar(StoreLocation.CurrentUser, valor)), (AlmacenDeLaMaquina, Buscar(StoreLocation.LocalMachine, valor))],
+                out var almacen);
+            informar?.Invoke($"Certificado:   {valor} ({almacen})");
+            return certificado;
         }
         // En Windows, SslStream no usa una clave efímera cargada de PEM: se re-importa desde PKCS#12.
         using var pem = Cargar("el certificado de esta workstation", valor, () => X509Certificate2.CreateFromPemFile(valor, config.ClaveCliente!));
+        informar?.Invoke($"Certificado:   {valor} (archivo PEM)");
         return new X509Certificate2(pem.Export(X509ContentType.Pkcs12));
+    }
+
+    private static X509Certificate2Collection Buscar(StoreLocation ubicacion, string huella)
+    {
+        using var almacen = new X509Store(StoreName.My, ubicacion);
+        almacen.Open(OpenFlags.ReadOnly);
+        return almacen.Certificates.Find(X509FindType.FindByThumbprint, huella, validOnly: false);
+    }
+
+    internal const string AlmacenDelUsuario = "almacén personal del usuario";
+    internal const string AlmacenDeLaMaquina = "almacén de la máquina";
+
+    /// <summary>
+    /// El certificado de la workstation entre lo que encontró cada almacén por su huella, en orden: el primero
+    /// que lo tiene manda. Sin clave privada, o sin permiso para usarla, se dice eso y no «no está».
+    /// </summary>
+    internal static X509Certificate2 ElegirCertificado(
+        string huella, IReadOnlyList<(string Nombre, X509Certificate2Collection Encontrados)> almacenes, out string almacen)
+    {
+        foreach (var (nombre, encontrados) in almacenes)
+        {
+            if (encontrados.Count == 0)
+                continue;
+            var certificado = encontrados[0];
+            if (!certificado.HasPrivateKey)
+                throw new InvalidOperationException(
+                    $"El certificado con huella {huella} del {nombre} no tiene clave privada: hay que importar el .pfx, no el .crt.");
+            ExigirClaveUsable(certificado, huella, nombre);
+            almacen = nombre;
+            return certificado;
+        }
+        throw new InvalidOperationException(
+            $"No hay un certificado con huella {huella} ni en el {AlmacenDelUsuario} ni en el {AlmacenDeLaMaquina}.");
+    }
+
+    /// <summary>
+    /// En el almacén de la máquina, la clave privada es legible sólo para quien tenga permiso sobre ella: si este
+    /// usuario de Windows no lo tiene, sin esto el error aparecería recién en el handshake y sin decir por qué.
+    /// </summary>
+    private static void ExigirClaveUsable(X509Certificate2 certificado, string huella, string almacen)
+    {
+        try
+        {
+            using AsymmetricAlgorithm? clave = (AsymmetricAlgorithm?)certificado.GetECDsaPrivateKey() ?? certificado.GetRSAPrivateKey();
+            if (clave is not null)
+                return;
+        }
+        catch (CryptographicException ex)
+        {
+            throw new InvalidOperationException(
+                $"Este usuario de Windows no puede usar la clave privada del certificado {huella} del {almacen} ({ex.Message}): " +
+                "un administrador tiene que correr scripts/instalar-certificado-workstation.ps1 en esta PC.", ex);
+        }
+        throw new InvalidOperationException($"El certificado {huella} del {almacen} no tiene una clave ECDSA ni RSA.");
     }
 
     private static bool EsDeLaCa(X509Certificate2 certificado, X509Certificate2 ca)
