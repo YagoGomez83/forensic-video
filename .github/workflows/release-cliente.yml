@@ -39,7 +39,7 @@ jobs:
         run: scripts/empaquetar-cliente.ps1 -Version $env:GITHUB_REF_NAME.Substring('cliente-'.Length) -Salida dist
       - name: Instalador y configuración de ejemplo
         run: |
-          cp scripts/instalar-cliente.ps1 despliegue/workstation/cliente.json.example dist/
+          cp scripts/instalar-cliente.ps1 scripts/instalar-certificado-workstation.ps1 despliegue/workstation/cliente.json.example dist/
           cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
@@ -69,4 +69,4 @@ jobs:
           } > notas.md
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "$GITHUB_REF_NAME" --notes-file notas.md \
-            forensic-cliente-win-x64.zip instalar-cliente.ps1 cliente.json.example SHA256SUMS SHA256SUMS.sigstore.json
+            forensic-cliente-win-x64.zip instalar-cliente.ps1 instalar-certificado-workstation.ps1 cliente.json.example SHA256SUMS SHA256SUMS.sigstore.json
