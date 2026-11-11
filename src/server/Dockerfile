@@ -1,6 +1,6 @@
 # Servidor de custodia. Contexto de build: la raíz del repo (necesita global.json y Directory.*.props).
 # Bases fijadas por digest; Dependabot propone las actualizaciones.
-FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:6ba9644da07bb5b560a402acec9ca38711a0762969f1b61da261df5c9f6f85da AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:1b955f179b02df4f0eb5fadedaa898cbe44d620a64aab52eec72c8e91d1355b5 AS build
 WORKDIR /repo
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/server/ src/server/
